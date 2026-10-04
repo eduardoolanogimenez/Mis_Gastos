@@ -1,6 +1,6 @@
 /* Mis gastos · service worker: permite abrir la app sin conexión.
    Si publicas una versión nueva de index.html, sube también este archivo cambiando VERSION. */
-const VERSION = 'mis-gastos-v3';
+const VERSION = 'mis-gastos-v4';
 const BASICOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

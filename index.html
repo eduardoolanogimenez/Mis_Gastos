@@ -80,7 +80,8 @@ main{padding:2px 16px calc(104px + env(safe-area-inset-bottom,0px));max-width:62
 .baldosas{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .baldosa{position:relative}
 .baldosa input{position:absolute;opacity:0;pointer-events:none}
-.baldosa span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:82px;padding:8px 4px;background:var(--surface);border:2px solid transparent;border-radius:var(--r-md);cursor:pointer;text-align:center;font-size:13.5px;line-height:1.15;-webkit-hyphens:auto;hyphens:auto;overflow-wrap:anywhere}
+.baldosa span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:82px;padding:8px 4px;background:var(--surface);border:2px solid transparent;border-radius:var(--r-md);cursor:pointer;text-align:center;font-size:13.5px;line-height:1.15;-webkit-hyphens:auto;hyphens:auto;overflow-wrap:break-word}
+.baldosa span.largo{font-size:11.5px;letter-spacing:-.015em}
 .baldosa span i{font-style:normal;font-size:28px;line-height:1}
 .baldosa input:checked + span{border-color:var(--c);background:color-mix(in srgb, var(--c) 14%, var(--surface))}
 .baldosa input:focus-visible + span{outline:3px solid var(--acento);outline-offset:2px}
@@ -284,6 +285,7 @@ h2{font-size:19px;margin:26px 0 10px}
 .tachado{text-decoration:line-through;color:var(--muted)}
 .saldo-l{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;border:0;background:var(--surface);border-radius:12px;padding:12px 14px;margin:4px 0 10px;cursor:pointer;font-size:15.5px;text-align:left}
 .saldo-l b{font-size:19px}
+.dif{font-size:16px;line-height:1.5;margin:10px 0 0}
 .pend-item{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:15.5px}
 .pend-item small{display:block;color:var(--muted);font-size:13px}
 .btn-mini{border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:7px 10px;font-size:14px;font-weight:700;cursor:pointer}
@@ -300,6 +302,8 @@ h2{font-size:19px;margin:26px 0 10px}
 .grupo-chip{border-style:dashed}
 .seg-g button{font-size:13px;padding:9px 0}
 .chart-box{touch-action:pan-y}
+.zoom-b{position:absolute;top:4px;right:4px;display:flex;gap:4px;z-index:2}
+.zoom-b button{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-size:19px;line-height:1;cursor:pointer;color:var(--ink);opacity:.92}
 /* Objetivos */
 .objetivo{display:block;width:100%;text-align:left;border:0;background:var(--surface);padding:13px 14px;border-bottom:1px solid var(--bg);cursor:pointer;font:inherit;color:inherit}
 .obj-l{display:flex;justify-content:space-between;gap:8px;font-size:16px}
@@ -604,7 +608,7 @@ function formMov(init, onGuardar, onBorrar){
   function pintarCats(){
     const cs = catsTipo(tipo).slice().sort((a,b) => (freq[b.id]||0)-(freq[a.id]||0));
     if (init.cat && !cs.some(c => c.id===init.cat)) cs.unshift(cat(init.cat));
-    $('[data-cats]', f).innerHTML = cs.map(c => `<label class="baldosa" style="--c:${c.color}"><input type="radio" name="cat" value="${c.id}" ${init.cat===c.id?'checked':''}><span><i>${c.emoji}</i>${esc(c.nombre)}</span></label>`).join('')
+    $('[data-cats]', f).innerHTML = cs.map(c => `<label class="baldosa" style="--c:${c.color}"><input type="radio" name="cat" value="${c.id}" ${init.cat===c.id?'checked':''}><span class="${c.nombre.length > 8 ? 'largo' : ''}"><i>${c.emoji}</i>${esc(c.nombre)}</span></label>`).join('')
       || '<p class="hint">No tienes categorías de este tipo. Añádelas en Ajustes → Categorías.</p>';
     f.querySelectorAll('[data-t]').forEach(b => b.setAttribute('aria-pressed', b.dataset.t===tipo));
     $('[data-sub]', f).hidden = tipo !== 'g'; f.querySelectorAll('[data-caja]').forEach(c => c.hidden = c.dataset.caja !== sub || tipo !== 'g');
@@ -641,7 +645,7 @@ function formMov(init, onGuardar, onBorrar){
   f.onsubmit = e => {
     e.preventDefault(); if (btn.disabled) return;
     const v = evalExpr(imp.value);
-    const m = { id: init.id || nuevoId('m'), t: tipo, fecha: f.elements.fecha.value, cat: f.querySelector('input[name=cat]:checked').value,
+    const m = { id: init.id || nuevoId('m'), cr: init.id ? init.cr : Date.now(), t: tipo, fecha: f.elements.fecha.value, cat: f.querySelector('input[name=cat]:checked').value,
                 imp: v, expr: /[+\-*/]/.test(imp.value.replace(/^-/,'')) ? imp.value.replace(/\s/g,'') : null, com: f.elements.com.value.trim() };
     if (init.rec) m.rec = init.rec;
     if (init.h) m.h = init.h;
@@ -679,15 +683,15 @@ function renderApuntar(forzar){
   const sec = $('#tab-apuntar');
   if (apuntarSucio && !forzar && sec.querySelector('form')) return;
   apuntarSucio = false;
-  sec.innerHTML = bannersArriba();
+  sec.innerHTML = bannerSaldo() + bannersArriba();
   const f = formMov({ t:'g' }, m => {
-    guardarMov(m);
-    toast((m.t==='g' ? 'Gasto' : 'Ingreso') + ' guardado: ' + fmt(m.imp) + ' en ' + cat(m.cat).nombre);
+    guardarMov(m); const sh = saldoHoy();
+    toast((m.t==='g' ? 'Gasto' : 'Ingreso') + ' guardado: ' + fmt(m.comp ? m.comp.total : m.reem ? m.reem.total : m.imp) + (sh !== null ? ' · saldo: ' + fmt(sh) : ''));
     avisoPresupuesto(m); renderApuntar(true);
   });
   sec.appendChild(f);
   f.addEventListener('input', () => apuntarSucio = true);
-  enlazarBanners(sec);
+  enlazarBanners(sec); enlazarSaldo(sec);
 }
 
 /* ════════════ Movimientos ════════════ */
@@ -747,13 +751,26 @@ function renderMovs(){
 
 /* ════════════ Gráficas (Chart.js) ════════════ */
 const charts = {};
+const ZOOM = { zoom:{ pinch:{ enabled:true }, wheel:{ enabled:true, modifierKey:'ctrl' }, mode:'x' }, pan:{ enabled:true, mode:'x', threshold:10 } };
 function dibujar(id, canvas, cfg){
   if (charts[id]) charts[id].destroy();
   if (!window.Chart || !canvas) return;
+  // Zoom con los dedos en todas las gráficas de barras y líneas; doble toque para volver
+  if (cfg.type !== 'doughnut'){ cfg.options = cfg.options || {}; cfg.options.plugins = cfg.options.plugins || {}; if (cfg.options.plugins.zoom === undefined) cfg.options.plugins.zoom = ZOOM;
+    canvas.ondblclick = () => { if (charts[id] && charts[id].resetZoom) charts[id].resetZoom(); }; }
   if (window.ChartZoom && !dibujar.z){ try { Chart.register(window.ChartZoom); } catch(e){} dibujar.z = true; }
   Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
   Chart.defaults.color = cssVar('--muted'); Chart.defaults.borderColor = cssVar('--grid');
   charts[id] = new Chart(canvas, cfg);
+  if (cfg.type !== 'doughnut' && window.ChartZoom) ponerBotonesZoom(id, canvas);
+}
+/** Botones + / − / restablecer sobre la gráfica. */
+function ponerBotonesZoom(id, canvas){
+  const caja = canvas.parentElement; if (!caja || caja.querySelector('.zoom-b')) return;
+  const z = document.createElement('div'); z.className = 'zoom-b';
+  z.innerHTML = '<button type="button" data-z="1.4" aria-label="Acercar">+</button><button type="button" data-z="0.7" aria-label="Alejar">−</button><button type="button" data-z="0" aria-label="Ver todo">⤢</button>';
+  z.querySelectorAll('button').forEach(b => b.onclick = () => { const c = charts[id]; if (!c) return; const k = Number(b.dataset.z); k ? c.zoom(k) : c.resetZoom(); });
+  caja.appendChild(z);
 }
 function dona(id, items, mini){
   const tot = items.reduce((s,i)=>s+i.v,0) || 1;
@@ -1040,26 +1057,32 @@ function renderGraficas(){
   st.gAnioCats = ys.includes(st.gAnioCats) ? st.gAnioCats : ult; st.gAnioRep = ys.includes(st.gAnioRep) ? st.gAnioRep : ult; st.gAnioAh = ys.includes(st.gAnioAh) ? st.gAnioAh : ult;
   st.aA = ys.includes(st.aA) ? st.aA : ys[Math.max(0, ys.length-2)]; st.aB = ys.includes(st.aB) ? st.aB : ult;
   st.aGrupo ??= 'todas'; st.aVista ??= 'importes'; st.aOrden ??= 'importe'; st.gDesde ??= 0; st.gHasta ??= 11; st.gAcum ??= false; st.gComo ??= 'suma';
-  st.tope ??= 100; st.log ??= false; st.ahTasa ??= true;
+  st.tope ??= 100; st.log ??= false; st.ahTasa ??= true; st.gPer ??= '12m';
+  // Periodo: los últimos 12 meses seguidos (por defecto) o el año natural, comparando años
+  const ult12 = []; { const h = new Date(); let y = h.getFullYear(), m = h.getMonth(); for (let k = 0; k < 12; k++){ ult12.unshift({ y, m }); m--; if (m < 0){ m = 11; y--; } } }
+  const es12 = st.gPer === '12m' && st.graf !== 'anios';
+  const claves = y => es12 ? ult12 : (() => { const o = []; for (let i = st.gDesde; i <= st.gHasta; i++) o.push({ y, m:i }); return o; })();
+  const etiq = K => K.map(k => es12 ? MC[k.m] + ' ' + String(k.y).slice(2) : MC[k.m]);
   const idx = []; for (let i = st.gDesde; i <= st.gHasta; i++) idx.push(i);
   const lab = idx.map(i => MC[i]);
   const fila = (t, c) => `<div class="fg"><span class="fg-t">${t}</span><div class="fg-c">${c}</div></div>`;
   const chipsA = () => ys.map(y => `<button type="button" class="fchip" data-ya="${y}" aria-pressed="${st.gAnios.includes(y)}"><i style="background:${colorAnio(y)}"></i>${y}</button>`).join('');
   const selA = (id, v) => `<select id="${id}">${ys.map(y => `<option ${y===v?'selected':''}>${y}</option>`).join('')}</select>`;
   const selM = (id, v) => `<select id="${id}">${MC.map((n,i) => `<option value="${i}" ${i===v?'selected':''}>${n}</option>`).join('')}</select>`;
-  const rango = () => fila('Meses', selM('gD', st.gDesde) + ' a ' + selM('gH', st.gHasta));
+  const periodo = () => fila('Periodo', `<div class="seg" style="--n:2;margin:0;flex:1"><button type="button" data-per="12m" aria-pressed="${st.gPer==='12m'}">Últimos 12 meses</button><button type="button" data-per="anio" aria-pressed="${st.gPer!=='12m'}">Por años</button></div>`);
+  const rango = () => es12 ? '' : fila('Meses', selM('gD', st.gDesde) + ' a ' + selM('gH', st.gHasta));
   const tipoG = (acum) => fila('Gráfica', `<div class="seg" style="--n:2;margin:0;flex:1"><button type="button" data-gt="barras" aria-pressed="${st.gTipo==='barras'}">Barras</button><button type="button" data-gt="linea" aria-pressed="${st.gTipo==='linea'}">Líneas</button></div>${acum ? `<label class="chk"><input type="checkbox" id="gAcum" ${st.gAcum?'checked':''}> Acumulado</label>` : ''}`);
   let html = `<div class="seg seg-g" style="--n:5">${[['meses','Mes a mes'],['reparto','Reparto'],['ahorro','Ahorro'],['cats','Categorías'],['anios','Años']].map(([k,l]) => `<button type="button" data-g="${k}" aria-pressed="${st.graf===k}">${l}</button>`).join('')}</div><div class="filtros-g">`;
-  if (st.graf==='meses') html += fila('Ver', `<select id="gMet">${[['g','Gastos'],['b','Básico'],['p','Personal'],['i','Ingresos'],['ahorro','Ahorro']].map(([k,l]) => `<option value="${k}" ${st.gMetrica===k?'selected':''}>${l}</option>`).join('')}</select>`) + fila('Años', chipsA()) + rango() + tipoG(true);
-  if (st.graf==='reparto') html += fila('Año', selA('gAnioR', st.gAnioRep)) + rango();
-  if (st.graf==='ahorro') html += fila('Año', selA('gAnioAh', st.gAnioAh)) + rango() + fila('Mostrar', `<label class="chk"><input type="checkbox" id="gTasa" ${st.ahTasa?'checked':''}> % de ahorro de cada mes</label>`);
+  if (st.graf==='meses') html += periodo() + fila('Ver', `<select id="gMet">${[['g','Gastos'],['b','Básico'],['p','Personal'],['i','Ingresos'],['ahorro','Ahorro']].map(([k,l]) => `<option value="${k}" ${st.gMetrica===k?'selected':''}>${l}</option>`).join('')}</select>`) + (es12 ? '' : fila('Años', chipsA())) + rango() + tipoG(true);
+  if (st.graf==='reparto') html += periodo() + (es12 ? '' : fila('Año', selA('gAnioR', st.gAnioRep))) + rango();
+  if (st.graf==='ahorro') html += periodo() + (es12 ? '' : fila('Año', selA('gAnioAh', st.gAnioAh))) + rango() + fila('Mostrar', `<label class="chk"><input type="checkbox" id="gTasa" ${st.ahTasa?'checked':''}> % de ahorro de cada mes</label>`);
   if (st.graf==='cats'){
     const g = (D.grupos||[]).find(x => x.cats.length===st.gCats.length && x.cats.every(c => st.gCats.includes(c)));
-    html += ((D.grupos||[]).length ? fila('Tus grupos', D.grupos.map(x => `<button type="button" class="fchip grupo-chip" data-gl="${x.id}" aria-pressed="${g===x}">${esc(x.nombre)}</button>`).join('')) : '')
+    html += periodo() + ((D.grupos||[]).length ? fila('Tus grupos', D.grupos.map(x => `<button type="button" class="fchip grupo-chip" data-gl="${x.id}" aria-pressed="${g===x}">${esc(x.nombre)}</button>`).join('')) : '')
       + fila('Categorías', catsTipo('g').concat(catsTipo('i')).map(c => `<button type="button" class="fchip" data-gc="${c.id}" aria-pressed="${st.gCats.includes(c.id)}">${c.emoji} ${esc(c.nombre)}</button>`).join('')
         + `<div style="display:flex;gap:16px;width:100%;margin-top:4px">${st.gCats.length > 1 ? `<button type="button" class="link" id="gGuardarG">${g ? 'Editar «' + esc(g.nombre) + '»' : 'Guardar como grupo'}</button>` : ''}<button type="button" class="link" id="gNada">Quitar todas</button></div>`)
       + fila('Cómo', `<select id="gComo">${[['suma','Sumadas, por años'],['separadas','Cada una por separado'],['desglose','Sumadas, con desglose']].map(([k,l]) => `<option value="${k}" ${st.gComo===k?'selected':''}>${l}</option>`).join('')}</select>`)
-      + (st.gComo==='suma' || st.gCats.length <= 1 ? fila('Años', chipsA()) : fila('Año', selA('gAnioC', st.gAnioCats))) + rango() + (st.gComo==='desglose' && st.gCats.length > 1 ? '' : tipoG(true));
+      + (es12 ? '' : (st.gComo==='suma' || st.gCats.length <= 1 ? fila('Años', chipsA()) : fila('Año', selA('gAnioC', st.gAnioCats)))) + rango() + (st.gComo==='desglose' && st.gCats.length > 1 ? '' : tipoG(true));
   }
   if (st.graf==='anios') html += fila('Años', selA('aA', st.aA) + ' frente a ' + selA('aB', st.aB)) + fila('Grupo', ['todas','b','p'].map(k => `<button type="button" class="fchip" data-gg="${k}" aria-pressed="${st.aGrupo===k}">${k==='todas' ? 'Todo' : GRUPOS[k].n}</button>`).join(''))
     + rango() + fila('Ver', `<div class="seg" style="--n:2;margin:0;flex:1"><button type="button" data-av="importes" aria-pressed="${st.aVista==='importes'}">Importes</button><button type="button" data-av="diferencia" aria-pressed="${st.aVista==='diferencia'}">Diferencia</button></div>
@@ -1068,7 +1091,7 @@ function renderGraficas(){
     <div class="ejes"><label class="chk"><input type="checkbox" id="gLog" ${st.log?'checked':''}> Escala logarítmica</label>
       <label class="tope"><span>Tope del eje</span><input type="range" id="gTope" min="5" max="100" step="5" value="${st.tope}" aria-label="Tope del eje"><output id="gTopeV">Auto</output></label>
       <button type="button" class="btn ghost mini" id="gReset">Restablecer vista</button>
-      <p class="hint">Si un mes muy alto no deja ver el resto, baja el tope. También puedes pellizcar la gráfica para hacer zoom.</p></div>`;
+      <p class="hint">Usa + y − sobre la gráfica (o pellízcala) para hacer zoom, arrástrala para moverte y toca ⤢ o dos veces para verla entera. Si un mes muy alto no deja ver el resto, baja el tope.</p></div>`;
   sec.innerHTML = html;
 
   const re = () => renderGraficas();
@@ -1076,6 +1099,7 @@ function renderGraficas(){
   sec.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { st.graf = b.dataset.g; re(); });
   sec.querySelectorAll('[data-gt]').forEach(b => b.onclick = () => { st.gTipo = b.dataset.gt; re(); });
   sec.querySelectorAll('[data-av]').forEach(b => b.onclick = () => { st.aVista = b.dataset.av; re(); });
+  sec.querySelectorAll('[data-per]').forEach(b => b.onclick = () => { st.gPer = b.dataset.per; re(); });
   sec.querySelectorAll('[data-ya]').forEach(b => b.onclick = () => { const y = Number(b.dataset.ya); st.gAnios = st.gAnios.includes(y) ? st.gAnios.filter(x => x!==y) : [...st.gAnios, y].sort(); re(); });
   sec.querySelectorAll('[data-gc]').forEach(b => b.onclick = () => { const c = b.dataset.gc; st.gCats = st.gCats.includes(c) ? st.gCats.filter(x => x!==c) : [...st.gCats, c]; re(); });
   sec.querySelectorAll('[data-gl]').forEach(b => b.onclick = () => { const g = D.grupos.find(x => x.id===b.dataset.gl); st.gCats = g.cats.filter(c => D.categorias.some(x => x.id===c)); if (st.gComo==='separadas') st.gComo = 'suma'; re(); });
@@ -1093,7 +1117,7 @@ function renderGraficas(){
   const eje = vals => { const n = vals.filter(v => typeof v==='number' && isFinite(v)); const mx = Math.max(0, ...n); const tope = st.tope < 100 && mx > 0 ? Math.ceil(mx*st.tope/100) : undefined;
     $('#gTopeV').textContent = tope ? fmt0(tope) : 'Auto';
     return { type: st.log ? 'logarithmic' : 'linear', max: tope, beginAtZero: !st.log, ticks:{ callback:v=>fmt0(v), maxTicksLimit:7 } }; };
-  const zoom = { zoom:{ pinch:{ enabled:true }, wheel:{ enabled:true, modifierKey:'ctrl' }, mode:'xy' }, pan:{ enabled:true, mode:'xy', threshold:8 } };
+  const zoom = { zoom:{ pinch:{ enabled:true }, wheel:{ enabled:true, modifierKey:'ctrl' }, mode:'xy' }, pan:{ enabled:true, mode:'xy', threshold:10 } };
   const opts = (vals, horiz) => ({ maintainAspectRatio:false, indexAxis: horiz ? 'y' : 'x', interaction:{ mode:'index', intersect:false },
     plugins:{ legend:{ position:'bottom', labels:{ usePointStyle:true } }, tooltip:{ callbacks:{ label:x => ' ' + x.dataset.label + ': ' + (x.dataset.yAxisID==='y2' ? x.raw + ' %' : fmt(x.raw)) } }, zoom },
     scales: horiz ? { x: eje(vals), y:{ grid:{ display:false } } } : { y: eje(vals), x:{ grid:{ display:false } } } });
@@ -1104,19 +1128,19 @@ function renderGraficas(){
   const sumaV = a => a.reduce((s,v)=>s+(v||0),0);
 
   if (st.graf==='reparto'){
-    const ms = idx.map(i => mes(st.gAnioRep, i));
+    const K = claves(st.gAnioRep); const ms = K.map(k => mes(k.y, k.m)); const lab = etiq(K);
     const B = ms.map(r => r.n ? r.b : null), P = ms.map(r => r.n ? r.p : null), A = ms.map(r => r.n ? Math.max(0, r.i - r.g) : null);
     const tB = sumaV(B), tP = sumaV(P), tI = ms.reduce((s,r)=>s+r.i,0), tA = tI - tB - tP, k = ms.filter(r=>r.n).length;
-    $('#gRes').innerHTML = `${st.gAnioRep}${rangoTxt}: de cada 100 € ingresados, <b>${tI ? Math.round(tB/tI*100) : '—'}</b> fueron a lo básico, <b>${tI ? Math.round(tP/tI*100) : '—'}</b> a gastos personales y <b>${tI ? Math.round(tA/tI*100) : '—'}</b> al ahorro.`;
+    $('#gRes').innerHTML = `${es12 ? 'Últimos 12 meses' : st.gAnioRep + rangoTxt}: de cada 100 € ingresados, <b>${tI ? Math.round(tB/tI*100) : '—'}</b> fueron a lo básico, <b>${tI ? Math.round(tP/tI*100) : '—'}</b> a gastos personales y <b>${tI ? Math.round(tA/tI*100) : '—'}</b> al ahorro.`;
     $('#gTabla').innerHTML = tabla([{ n:'Básico', c:GRUPOS.b.color, t:tB, k }, { n:'Personal', c:GRUPOS.p.color, t:tP, k }, { n:'Ahorro', c:COL_AHORRO, t:tA, k }]);
     const o = opts(ms.map(r => r.n ? Math.max(r.g, r.i) : null)); o.scales.x.stacked = true; o.scales.y.stacked = true;
     o.plugins.tooltip.callbacks.footer = xs => { const r = ms[xs[0].dataIndex]; return r.i ? 'Ingresos: ' + fmt(r.i) + (r.i < r.g ? ' (gastaste ' + fmt(r.g - r.i) + ' de más)' : '') : ''; };
     return dibujar('g', cv, { type:'bar', data:{ labels: lab, datasets:[{ label:'Básico', data:B, backgroundColor:GRUPOS.b.color, stack:'s', borderRadius:2 }, { label:'Personal', data:P, backgroundColor:GRUPOS.p.color, stack:'s', borderRadius:2 }, { label:'Ahorro', data:A, backgroundColor:COL_AHORRO, stack:'s', borderRadius:2 }] }, options: o });
   }
   if (st.graf==='ahorro'){
-    const ms = idx.map(i => mes(st.gAnioAh, i)); const I = ms.map(r => r.n ? r.i : null), G = ms.map(r => r.n ? r.g : null), A = ms.map(r => r.n ? r.ahorro : null);
+    const K = claves(st.gAnioAh); const ms = K.map(k => mes(k.y, k.m)); const lab = etiq(K); const I = ms.map(r => r.n ? r.i : null), G = ms.map(r => r.n ? r.g : null), A = ms.map(r => r.n ? r.ahorro : null);
     const tI = sumaV(I), tG = sumaV(G);
-    $('#gRes').innerHTML = `${st.gAnioAh}${rangoTxt}: ingresos <b>${fmt0(tI)}</b> · gastos <b>${fmt0(tG)}</b> · ahorro <b class="${tI-tG>=0?'down':'up'}">${fmt0(tI-tG)}</b> (${tI ? Math.round((tI-tG)/tI*100) : '—'} %)`;
+    $('#gRes').innerHTML = `${es12 ? 'Últimos 12 meses' : st.gAnioAh + rangoTxt}: ingresos <b>${fmt0(tI)}</b> · gastos <b>${fmt0(tG)}</b> · ahorro <b class="${tI-tG>=0?'down':'up'}">${fmt0(tI-tG)}</b> (${tI ? Math.round((tI-tG)/tI*100) : '—'} %)`;
     $('#gTabla').innerHTML = '';
     const ds = [{ type:'bar', label:'Ingresos', data:I, backgroundColor: cssVar('--ingreso'), borderRadius:3, order:3 }, { type:'bar', label:'Gastos', data:G, backgroundColor: cssVar('--gasto'), borderRadius:3, order:3 },
       { type:'line', label:'Ahorro', data:A, borderColor:COL_AHORRO, backgroundColor:COL_AHORRO, borderWidth:3, pointRadius:3, tension:.3, order:1 }];
@@ -1127,23 +1151,30 @@ function renderGraficas(){
   if (st.graf==='meses' || (st.graf==='cats' && (st.gComo==='suma' || st.gCats.length <= 1))){
     if (st.graf==='cats' && !st.gCats.length){ $('#gRes').textContent = 'Elige una o varias categorías.'; return; }
     const val = r => st.graf==='meses' ? (st.gMetrica==='ahorro' ? r.ahorro : r[st.gMetrica]) : st.gCats.reduce((s,c) => s + (r.cats[c]||0), 0);
-    const filas = [];
-    const ds = st.gAnios.map(y => { const data = idx.map(i => { const r = mes(y, i); return r.n ? val(r) : null; });
+    const filas = []; let lab = idx.map(i => MC[i]); let ds;
+    if (es12){
+      lab = etiq(ult12);
+      const act = ult12.map(k => { const r = mes(k.y, k.m); return r.n ? val(r) : null; }), ant = ult12.map(k => { const r = mes(k.y-1, k.m); return r.n ? val(r) : null; });
+      filas.push({ n:'Últimos 12 meses', c: cssVar('--acento'), t:sumaV(act), k:act.filter(v=>v!==null).length }, { n:'Los 12 anteriores', c: cssVar('--muted'), t:sumaV(ant), k:ant.filter(v=>v!==null).length });
+      ds = [serie('Últimos 12 meses', act, cssVar('--acento')), { ...serie('Un año antes', ant, cssVar('--off')), ...(st.gTipo==='linea' ? { borderDash:[5,4], borderWidth:2, pointRadius:0 } : {}) }];
+    } else ds = st.gAnios.map(y => { const data = idx.map(i => { const r = mes(y, i); return r.n ? val(r) : null; });
       filas.push({ n:String(y), c:colorAnio(y), t:sumaV(data), k:data.filter(v=>v!==null).length }); return serie(String(y), data, colorAnio(y)); });
-    $('#gRes').textContent = (st.graf==='meses' ? ({g:'Gastos',b:'Gasto básico',p:'Gasto personal',i:'Ingresos',ahorro:'Ahorro'})[st.gMetrica] : st.gCats.map(c => cat(c).nombre).join(' + ')) + (st.gAcum ? ' acumulado' : ' de cada mes') + rangoTxt;
+    $('#gRes').textContent = (st.graf==='meses' ? ({g:'Gastos',b:'Gasto básico',p:'Gasto personal',i:'Ingresos',ahorro:'Ahorro'})[st.gMetrica] : st.gCats.map(c => cat(c).nombre).join(' + ')) + (st.gAcum ? ' acumulado' : ' de cada mes') + (es12 ? ', últimos 12 meses' : rangoTxt);
     $('#gTabla').innerHTML = tabla(filas);
     return dibujar('g', cv, { type: st.gTipo==='barras' ? 'bar' : 'line', data:{ labels: lab, datasets: ds }, options: opts(ds.flatMap(d => d.data)) });
   }
   if (st.graf==='cats'){
     const filas = []; const desg = st.gComo==='desglose';
-    const ds = st.gCats.map(c => { const data = idx.map(i => { const r = mes(st.gAnioCats, i); return r.n ? (r.cats[c]||0) : null; });
+    const K = claves(st.gAnioCats); const lab = etiq(K);
+    const ds = st.gCats.map(c => { const data = K.map(k => { const r = mes(k.y, k.m); return r.n ? (r.cats[c]||0) : null; });
       filas.push({ n:cat(c).nombre, c:cat(c).color, t:sumaV(data), k:data.filter(v=>v!==null).length });
       return desg ? { label: cat(c).nombre, data, backgroundColor: cat(c).color, stack:'s', borderRadius:2, maxBarThickness:26 } : serie(cat(c).nombre, data, cat(c).color); });
     const tot = filas.reduce((s,f)=>s+f.t,0);
     if (desg) filas.forEach(f => f.n += ' · ' + (tot ? Math.round(f.t/tot*100) : 0) + ' %');
-    $('#gRes').innerHTML = desg ? `<b>${st.gCats.map(c => esc(cat(c).nombre)).join(' + ')}</b> en ${st.gAnioCats}${rangoTxt}: <b>${fmt0(tot)}</b>` : st.gCats.length + ' categorías en ' + st.gAnioCats + rangoTxt;
+    const cuando = es12 ? 'los últimos 12 meses' : st.gAnioCats + rangoTxt;
+    $('#gRes').innerHTML = desg ? `<b>${st.gCats.map(c => esc(cat(c).nombre)).join(' + ')}</b> en ${cuando}: <b>${fmt0(tot)}</b>` : st.gCats.length + ' categorías en ' + cuando;
     $('#gTabla').innerHTML = tabla(filas.sort((a,b)=>b.t-a.t));
-    const totales = idx.map((_, k) => ds.reduce((s,d) => s + (d.data[k]||0), 0));
+    const totales = K.map((_, k) => ds.reduce((s,d) => s + (d.data[k]||0), 0));
     const o = opts(desg ? totales : ds.flatMap(d => d.data)); if (desg){ o.scales.x.stacked = true; o.scales.y.stacked = true; o.plugins.tooltip.callbacks.footer = xs => 'Total: ' + fmt(xs.reduce((s,x)=>s+(x.raw||0),0)); }
     return dibujar('g', cv, { type: desg || st.gTipo==='barras' ? 'bar' : 'line', data:{ labels: lab, datasets: ds }, options: o });
   }
@@ -1183,25 +1214,31 @@ function eventosCuenta(){
   if (cache.__ev) return cache.__ev;
   const ev = [];
   D.movs.forEach(x => {
-    if (x.t==='i'){ ev.push([x.fecha, x.imp]); return; }
-    ev.push([x.fecha, -(x.comp ? x.comp.total : x.reem ? x.reem.total : x.imp)]);
-    if (x.comp) x.comp.deu.forEach(d => { if (d.ok) ev.push([d.f || x.fecha, d.i]); });
-    if (x.reem && x.reem.ok) ev.push([x.reem.f || x.fecha, x.reem.total]);
+    if (x.t==='i'){ ev.push([x.fecha, x.imp, x.cr||0]); return; }
+    ev.push([x.fecha, -(x.comp ? x.comp.total : x.reem ? x.reem.total : x.imp), x.cr||0]);
+    if (x.comp) x.comp.deu.forEach(d => { if (d.ok) ev.push([d.f || x.fecha, d.i, d.cr||0]); });
+    if (x.reem && x.reem.ok) ev.push([x.reem.f || x.fecha, x.reem.total, x.reem.cr||0]);
   });
   D.invMovs.forEach(x => { const v = inv(x.inv); if (!v || v.desdeCuenta === false || x.ini) return;
-    if (x.k==='aporte' || x.k==='compra') ev.push([x.fecha, -x.imp]);
-    else if (x.k==='retirada' || x.k==='venta' || x.k==='dividendo') ev.push([x.fecha, x.imp]); });
+    if (x.k==='aporte' || x.k==='compra') ev.push([x.fecha, -x.imp, x.cr||0]);
+    else if (x.k==='retirada' || x.k==='venta' || x.k==='dividendo') ev.push([x.fecha, x.imp, x.cr||0]); });
   return cache.__ev = ev;
 }
+/**
+ * ¿Este movimiento llegó después del saldo de referencia?
+ *  - Saldo comprobado con el banco: cuenta lo de fechas posteriores y lo de ese mismo día apuntado después de comprobar.
+ *  - Saldo traído de un Excel: además, todo lo apuntado en esta app (aunque sea de una fecha anterior).
+ */
+const despuesDe = (e, s) => e[0] > s.fecha || (s.ts ? (e[0] === s.fecha && e[2] > s.ts) : e[2] > 0);
 /** Saldo al final del día indicado, partiendo del saldo real más cercano que hayas comprobado con el banco. */
 function saldoA(hasta){
   const ss = (D.saldos||[]).slice().sort((a,b) => a.fecha.localeCompare(b.fecha));
   if (!ss.length) return null;
   const ev = eventosCuenta();
   const antes = ss.filter(x => x.fecha <= hasta).pop();
-  if (antes) return antes.saldo + ev.filter(e => e[0] > antes.fecha && e[0] <= hasta).reduce((s,e)=>s+e[1],0);
+  if (antes) return antes.saldo + ev.filter(e => despuesDe(e, antes) && e[0] <= hasta).reduce((s,e)=>s+e[1],0);
   const despues = ss[0];
-  return despues.saldo - ev.filter(e => e[0] > hasta && e[0] <= despues.fecha).reduce((s,e)=>s+e[1],0);
+  return despues.saldo - ev.filter(e => e[0] > hasta && !despuesDe(e, despues)).reduce((s,e)=>s+e[1],0);
 }
 const saldoHoy = () => saldoA(hoyISO());
 const finMes = (y, m) => { const h = new Date(); return y===h.getFullYear() && m===h.getMonth() ? hoyISO() : iso(new Date(y, m+1, 0)); };
@@ -1215,23 +1252,26 @@ function verCuenta(){
   const s = saldoHoy(); const box = document.createElement('div');
   const ss = (D.saldos||[]).slice().sort((a,b) => b.fecha.localeCompare(a.fecha));
   box.innerHTML = `${s !== null ? `<div class="cifra"><div class="label">Saldo calculado hoy</div><div class="valor num">${fmt(s)}</div></div>
-      <p class="hint">Lo que tenías la última vez que lo comprobaste, más lo que has ingresado, menos lo que has gastado y lo que has llevado a ahorro e inversión.</p>
+      <p class="hint">Se actualiza solo con todo lo que apuntas: suma los ingresos y resta los gastos y lo que llevas a ahorro e inversión.</p>
       <div class="panel" style="margin-top:12px"><div class="chart-box" style="height:200px"><canvas id="cCta"></canvas></div></div>` : '<p>Escribe lo que tienes ahora en la cuenta (míralo en la app de tu banco). A partir de ahí, la app calcula tu saldo con lo que vas apuntando.</p>'}
     <h2>${s !== null ? 'Comprobar con el banco' : 'Saldo de hoy'}</h2>
-    <form novalidate><div class="fila2"><label class="campo" style="margin-top:0"><span>Saldo real en el banco</span><input name="s" inputmode="decimal" placeholder="0,00"></label>
-      <label class="campo" style="margin-top:0"><span>A fecha de</span><input type="date" name="f" value="${hoyISO()}"></label></div>
-      <p class="hint" data-dif></p><button class="btn primary" type="submit">${s !== null ? 'Guardar como saldo correcto' : 'Guardar'}</button></form>
-    ${ss.length ? `<h2>Comprobaciones anteriores</h2><div class="grupo">${ss.slice(0,12).map(x => `<div class="mov" style="cursor:default"><span class="txt"><span class="c">${new Date(x.fecha+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}</span>${x.dif ? `<span class="s">Diferencia encontrada: ${fmt(x.dif)}</span>` : ''}</span><span class="i num">${fmt(x.saldo)}</span><button type="button" class="icon-btn" data-del="${x.id}" aria-label="Borrar">✕</button></div>`).join('')}</div>` : ''}`;
+    <form novalidate><label class="campo" style="margin-top:0"><span>${s !== null ? 'Escribe lo que pone tu banco ahora' : 'Lo que pone tu banco ahora'}</span><input name="s" inputmode="decimal" placeholder="0,00"></label>
+      <p class="dif" data-dif></p>
+      <button class="btn ${s !== null ? 'ghost' : 'primary'}" type="submit" data-aj ${s !== null ? 'hidden' : ''}>${s !== null ? 'Ajustar la app al saldo del banco' : 'Guardar'}</button>
+      ${s !== null ? '<p class="hint" data-ajh hidden>Ajústala solo si ya has revisado la diferencia y no es un gasto o ingreso sin apuntar. Desde ahí, la app seguirá sumando y restando lo que apuntes.</p>' : ''}</form>
+    ${ss.length ? `<h2>Saldos de referencia</h2><div class="grupo">${ss.slice(0,12).map(x => `<div class="mov" style="cursor:default"><span class="txt"><span class="c">${new Date(x.fecha+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}</span>${x.dif ? `<span class="s">${x.ts ? 'Ajustada al banco' : 'Saldo traído del Excel'}${x.dif ? ' · diferencia ' + fmt(x.dif) : ''}</span>` : ''}</span><span class="i num">${fmt(x.saldo)}</span><button type="button" class="icon-btn" data-del="${x.id}" aria-label="Borrar">✕</button></div>`).join('')}</div>` : ''}`;
   const f = $('form', box);
-  const dif = () => { const v = evalExpr(f.elements.s.value); const c = saldoA(f.elements.f.value); const p = $('[data-dif]', f);
-    if (v === null || Number.isNaN(v) || c === null){ p.textContent = ''; return; }
-    const d = Math.round((v - c)*100)/100;
-    p.innerHTML = Math.abs(d) < 0.01 ? '<b style="color:var(--pos)">Cuadra al céntimo.</b>' : `La app calculaba <b>${fmt(c)}</b>: hay <b class="up">${fmt(d)}</b> de diferencia. ${d < 0 ? 'Puede que falte algún gasto por apuntar.' : 'Puede que falte algún ingreso, o que hayas apuntado algo dos veces.'}`; };
+  const dif = () => { const v = evalExpr(f.elements.s.value); const c = saldoHoy(); const p = $('[data-dif]', f); const aj = $('[data-aj]', f), ajh = $('[data-ajh]', f);
+    if (v === null || Number.isNaN(v) || c === null){ p.innerHTML = ''; if (c !== null){ aj.hidden = true; if (ajh) ajh.hidden = true; } return; }
+    const d = Math.round((v - c)*100)/100; const ok = Math.abs(d) < 0.01;
+    p.innerHTML = ok ? '✅ <b>Coincide al céntimo.</b> Lo tienes todo apuntado.'
+      : `La app dice <b>${fmt(c)}</b> y tu banco <b>${fmt(v)}</b>: hay <b class="up">${fmt(Math.abs(d))}</b> de diferencia.<br>${d < 0 ? 'En el banco hay menos: puede que falte algún <b>gasto</b> por apuntar.' : 'En el banco hay más: puede que falte algún <b>ingreso</b>, o que algo esté apuntado dos veces.'}`;
+    aj.hidden = ok; if (ajh) ajh.hidden = ok; };
   f.addEventListener('input', dif);
   f.onsubmit = e => { e.preventDefault(); const v = evalExpr(f.elements.s.value); if (v === null || Number.isNaN(v)) return toast('Escribe el saldo del banco.', true);
-    const fecha = f.elements.f.value || hoyISO(); const c = saldoA(fecha);
-    D.saldos = (D.saldos||[]).filter(x => x.fecha !== fecha).concat([{ id: nuevoId('s'), fecha, saldo: v, dif: c === null ? null : Math.round((v - c)*100)/100 }]);
-    guardar(); toast('Saldo guardado'); verCuenta(); render(); };
+    const fecha = hoyISO(); const c = saldoA(fecha);
+    D.saldos = (D.saldos||[]).filter(x => x.fecha !== fecha).concat([{ id: nuevoId('s'), fecha, ts: Date.now(), saldo: v, dif: c === null ? null : Math.round((v - c)*100)/100 }]);
+    guardar(); toast(c === null ? 'Saldo guardado' : 'App ajustada al saldo del banco'); verCuenta(); render(); };
   box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { D.saldos = D.saldos.filter(x => x.id !== b.dataset.del); guardar(); verCuenta(); render(); });
   abrirSheet('Tu cuenta', box);
   if (s !== null){
@@ -1262,7 +1302,7 @@ function verPendientes(){
     + (P.reem.length ? `<h2>De trabajo · ${fmt(P.tR)}</h2><div class="panel">${P.reem.map(r => `<div class="pend-item"><span>${cat(r.m.cat).emoji} ${esc(r.m.com || cat(r.m.cat).nombre)}<small>${r.quien ? esc(r.quien) + ' · ' : ''}${fecha(r.m)}</small></span><b class="num">${fmt(r.imp)}</b><button type="button" class="btn-mini" data-c="${r.m.id}" data-i="-1">Devuelto</button></div>`).join('')}</div>` : '')
     + (!P.deudas.length && !P.reem.length ? '<div class="vacio">No tienes nada pendiente de cobrar.</div>' : '');
   box.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { const m = D.movs.find(x => x.id===b.dataset.c); const i = Number(b.dataset.i);
-    if (i < 0) Object.assign(m.reem, { ok:true, f:hoyISO() }); else Object.assign(m.comp.deu[i], { ok:true, f:hoyISO() });
+    if (i < 0) Object.assign(m.reem, { ok:true, f:hoyISO(), cr:Date.now() }); else Object.assign(m.comp.deu[i], { ok:true, f:hoyISO(), cr:Date.now() });
     guardar(); toast('Marcado como cobrado'); verPendientes(); render(); });
   abrirSheet('Pendiente de cobrar', box);
 }
@@ -1271,7 +1311,7 @@ function verPendientes(){
 function aplicarFijosAuto(){
   const h = new Date(); const dm = new Date(h.getFullYear(), h.getMonth()+1, 0).getDate(); const hechos = [];
   recPendientes().filter(r => r.auto && Math.min(r.dia, dm) <= h.getDate()).forEach(r => {
-    D.movs.push({ id:nuevoId('m'), t: cat(r.cat).tipo, fecha: iso(new Date(h.getFullYear(), h.getMonth(), Math.min(r.dia, dm))), cat:r.cat, imp:r.importe, expr:null, com:r.com||'', rec:r.id }); hechos.push(cat(r.cat).nombre); });
+    D.movs.push({ id:nuevoId('m'), cr: Date.now(), t: cat(r.cat).tipo, fecha: iso(new Date(h.getFullYear(), h.getMonth(), Math.min(r.dia, dm))), cat:r.cat, imp:r.importe, expr:null, com:r.com||'', rec:r.id }); hechos.push(cat(r.cat).nombre); });
   if (hechos.length){ guardar(); setTimeout(() => toast('Apuntado automáticamente: ' + hechos.join(', ')), 600); }
 }
 
@@ -1291,7 +1331,7 @@ function revisarRecurrentes(){
     <button class="btn primary" type="submit">Apuntar los marcados</button><button class="btn ghost" type="button" data-g>Gestionar gastos fijos</button>`;
   f.onsubmit = e => { e.preventDefault(); let n = 0;
     f.querySelectorAll('[name=sel]:checked').forEach(c => { const r = D.recurrentes.find(x => x.id===c.value); const v = evalExpr(f.elements['i-'+r.id].value); if (!(v > 0)) return;
-      D.movs.push({ id:nuevoId('m'), t: cat(r.cat).tipo, fecha: iso(new Date(h.getFullYear(), h.getMonth(), Math.min(r.dia, dm))), cat:r.cat, imp:v, expr:null, com:r.com||'', rec:r.id }); n++; });
+      D.movs.push({ id:nuevoId('m'), cr: Date.now(), t: cat(r.cat).tipo, fecha: iso(new Date(h.getFullYear(), h.getMonth(), Math.min(r.dia, dm))), cat:r.cat, imp:v, expr:null, com:r.com||'', rec:r.id }); n++; });
     guardar(); cerrarSheet(); toast(n + (n===1 ? ' apuntado' : ' apuntados')); renderApuntar(true); if (st.tab!=='apuntar') render(); };
   $('[data-g]', f).onclick = ajustesFijos;
   abrirSheet('Gastos fijos de ' + MESES[h.getMonth()].toLowerCase(), f);
@@ -1741,7 +1781,7 @@ function pantallaImport(){
   $('#cCols', box).onclick = columnasImport;
   $('#bImp', box).onclick = () => {
     const sel = it.filter(x => x.sel && x.cat);
-    sel.forEach(x => D.movs.push({ id: nuevoId('m'), t: x.t, fecha: x.fecha, cat: x.cat, imp: x.imp, expr: null, com: x.com.trim(), h: x.hash }));
+    sel.forEach(x => D.movs.push({ id: nuevoId('m'), cr: Date.now(), t: x.t, fecha: x.fecha, cat: x.cat, imp: x.imp, expr: null, com: x.com.trim(), h: x.hash }));
     D.importacion = { ...(D.importacion||{}), [IMP.firma]: IMP.col }; guardar();
     toast(sel.length + (sel.length===1 ? ' movimiento guardado' : ' movimientos guardados')); proponerReglas(sel);
   };
@@ -1973,7 +2013,7 @@ function formInvMov(v, k, x){
     if (!(i > 0) && !(k==='valor' && i===0)) return toast('Pon un importe válido.', true);
     if (esAcc && !(a > 0)) return toast('Pon cuántas acciones.', true);
     if (k==='venta' && a > estadoInv(v).acciones + (x ? x.acc : 0) + 1e-9) return toast('No tienes tantas acciones.', true);
-    const m = { id: x ? x.id : nuevoId('v'), inv: v.id, fecha: f.elements.f.value || hoyISO(), k, com: f.elements.n.value.trim() };
+    const m = { id: x ? x.id : nuevoId('v'), cr: x ? x.cr : Date.now(), inv: v.id, fecha: f.elements.f.value || hoyISO(), k, com: f.elements.n.value.trim() };
     if (k==='precio') m.precio = i; else m.imp = i;
     if (esAcc) m.acc = a;
     D.invMovs = D.invMovs.filter(y => y.id !== m.id).concat([m]); guardar(); toast(KINV[k] + ' guardada'); detalleInv(v.id); render(); };
