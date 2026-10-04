@@ -305,8 +305,19 @@ h2{font-size:19px;margin:26px 0 10px}
 .grupo-chip{border-style:dashed}
 .seg-g button{font-size:13px;padding:9px 0}
 .chart-box{touch-action:pan-y}
-.zoom-b{position:absolute;top:4px;right:4px;display:flex;gap:4px;z-index:2}
-.zoom-b button{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-size:19px;line-height:1;cursor:pointer;color:var(--ink);opacity:.92}
+.barra-g{display:flex;justify-content:flex-end;gap:6px;margin:0 0 8px}
+.barra-g button,.pc-b button{width:38px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:20px;line-height:1;cursor:pointer;color:var(--ink);display:grid;place-items:center}
+.pc{position:fixed;inset:0;z-index:60;background:var(--surface);display:flex;flex-direction:column}
+.pc-h{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 8px;border-bottom:1px solid var(--line)}
+.pc-h b{flex:1;font-size:15px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pc-b{display:flex;gap:5px;flex:none}
+.pc-stage{position:relative;flex:1;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));overflow:hidden}
+.pc-box{position:relative;width:100%;height:100%}
+.pc-stage.girado .pc-box{position:absolute;top:50%;left:50%;width:calc(100vh - 90px);height:calc(100vw - 20px);transform:translate(-50%,-50%) rotate(90deg)}
+.pc-menu{position:absolute;right:12px;top:calc(58px + env(safe-area-inset-top,0px));background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);overflow:hidden;z-index:2}
+.pc-menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:14px 16px;font-size:15.5px;cursor:pointer;border-bottom:1px solid var(--line)}
+.pc-menu button:last-child{border-bottom:0}
+body.sin-scroll{overflow:hidden}
 /* Objetivos */
 .objetivo{display:block;width:100%;text-align:left;border:0;background:var(--surface);padding:13px 14px;border-bottom:1px solid var(--bg);cursor:pointer;font:inherit;color:inherit}
 .obj-l{display:flex;justify-content:space-between;gap:8px;font-size:16px}
@@ -764,9 +775,18 @@ function renderMovs(){
 /* ════════════ Gráficas (Chart.js) ════════════ */
 const charts = {};
 const ZOOM = { zoom:{ pinch:{ enabled:true }, wheel:{ enabled:true, modifierKey:'ctrl' }, mode:'x' }, pan:{ enabled:true, mode:'x', threshold:10 } };
-function dibujar(id, canvas, cfg){
+const fuentes = {};
+/** Copia profunda que conserva las funciones (formatos de los ejes y de las etiquetas). */
+function clonar(o){
+  if (Array.isArray(o)) return o.map(clonar);
+  if (o && typeof o === 'object' && !(o instanceof Node)){ const r = {}; for (const k in o) r[k] = clonar(o[k]); return r; }
+  return o;
+}
+function dibujar(id, canvas, cfg, op){
   if (charts[id]) charts[id].destroy();
   if (!window.Chart || !canvas) return;
+  const mini = cfg.options && cfg.options.events && !cfg.options.events.length;
+  if (cfg.type !== 'doughnut' && !(op && op.sinBarra)) fuentes[id] = { cfg: clonar(cfg), titulo: tituloDe(canvas) };
   // Zoom con los dedos en todas las gráficas de barras y líneas; doble toque para volver
   if (cfg.type !== 'doughnut'){ cfg.options = cfg.options || {}; cfg.options.plugins = cfg.options.plugins || {}; if (cfg.options.plugins.zoom === undefined) cfg.options.plugins.zoom = ZOOM;
     canvas.ondblclick = () => { if (charts[id] && charts[id].resetZoom) charts[id].resetZoom(); }; }
@@ -774,15 +794,97 @@ function dibujar(id, canvas, cfg){
   Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
   Chart.defaults.color = cssVar('--muted'); Chart.defaults.borderColor = cssVar('--grid');
   charts[id] = new Chart(canvas, cfg);
-  if (cfg.type !== 'doughnut' && window.ChartZoom) ponerBotonesZoom(id, canvas);
+  if (cfg.type !== 'doughnut' && !mini && !(op && op.sinBarra)) ponerBarra(id, canvas);
 }
-/** Botones + / − / restablecer sobre la gráfica. */
-function ponerBotonesZoom(id, canvas){
-  const caja = canvas.parentElement; if (!caja || caja.querySelector('.zoom-b')) return;
-  const z = document.createElement('div'); z.className = 'zoom-b';
-  z.innerHTML = '<button type="button" data-z="1.4" aria-label="Acercar">+</button><button type="button" data-z="0.7" aria-label="Alejar">−</button><button type="button" data-z="0" aria-label="Ver todo">⤢</button>';
-  z.querySelectorAll('button').forEach(b => b.onclick = () => { const c = charts[id]; if (!c) return; const k = Number(b.dataset.z); k ? c.zoom(k) : c.resetZoom(); });
-  caja.appendChild(z);
+/** Título para la pantalla completa y la descarga: el de su panel, el resumen de la gráfica o el de la ventana. */
+function tituloDe(canvas){
+  const p = canvas.closest('.panel'); const h3 = p && p.querySelector('h3'); if (h3) return h3.textContent.trim();
+  let el = p;
+  while (el && el.previousElementSibling){ el = el.previousElementSibling;
+    if (el.id === 'gRes' && el.textContent.trim()) return el.textContent.trim();
+    if (/^H[23]$/.test(el.tagName)) return el.textContent.trim(); }
+  if (canvas.closest('#sheet')) return $('#sheetTitle').textContent.trim();
+  return TITULOS[st.tab] || 'Gráfica';
+}
+const ICO = {
+  todo: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+  completa: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>',
+  girar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="10" rx="2"/><path d="M12 3a9 9 0 0 1 8 5"/><path d="M20 3v5h-5"/></svg>',
+  bajar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 19h16"/></svg>'
+};
+/** Barra encima de la gráfica: zoom (si está disponible) y pantalla completa. */
+function ponerBarra(id, canvas){
+  const caja = canvas.parentElement; if (!caja || !caja.parentElement) return;
+  const prev = caja.previousElementSibling; if (prev && prev.classList.contains('barra-g')) prev.remove();
+  const b = document.createElement('div'); b.className = 'barra-g';
+  b.innerHTML = (window.ChartZoom ? '<button type="button" data-z="0.7" aria-label="Alejar">−</button><button type="button" data-z="1.4" aria-label="Acercar">+</button><button type="button" data-z="0" aria-label="Ver entera">' + ICO.todo + '</button>' : '')
+    + '<button type="button" data-pc aria-label="Pantalla completa">' + ICO.completa + '</button>';
+  b.querySelectorAll('[data-z]').forEach(x => x.onclick = () => { const c = charts[id]; if (!c) return; const k = Number(x.dataset.z); k ? c.zoom(k) : c.resetZoom(); });
+  b.querySelector('[data-pc]').onclick = () => pantallaCompleta(id);
+  caja.parentElement.insertBefore(b, caja);
+}
+
+/* ── Pantalla completa ── */
+function pantallaCompleta(id){
+  const f = fuentes[id]; if (!f) return;
+  let ov = $('#pc');
+  if (!ov){ ov = document.createElement('div'); ov.id = 'pc'; ov.className = 'pc'; ov.setAttribute('role','dialog'); ov.setAttribute('aria-modal','true'); document.body.appendChild(ov); }
+  ov.innerHTML = `<header class="pc-h"><b>${esc(f.titulo)}</b>
+      <div class="pc-b">${window.ChartZoom ? '<button type="button" data-z="0.7" aria-label="Alejar">−</button><button type="button" data-z="1.4" aria-label="Acercar">+</button><button type="button" data-z="0" aria-label="Ver entera">' + ICO.todo + '</button>' : ''}
+      <button type="button" data-g aria-label="Girar">${ICO.girar}</button><button type="button" data-d aria-label="Descargar">${ICO.bajar}</button><button type="button" data-x aria-label="Cerrar">✕</button></div></header>
+    <div class="pc-stage"><div class="pc-box"><canvas id="pcC"></canvas></div></div>
+    <div class="pc-menu" hidden><button type="button" data-html>Descargar como página web (HTML)</button><button type="button" data-png>Descargar como imagen (PNG)</button></div>`;
+  ov.hidden = false; document.body.classList.add('sin-scroll');
+  dibujar('pc', $('#pcC', ov), clonar(f.cfg), { sinBarra:true });
+  const c = () => charts.pc;
+  ov.querySelectorAll('[data-z]').forEach(x => x.onclick = () => { const k = Number(x.dataset.z); k ? c().zoom(k) : c().resetZoom(); });
+  $('[data-g]', ov).onclick = () => { $('.pc-stage', ov).classList.toggle('girado'); setTimeout(() => c() && c().resize(), 60); };
+  const menu = $('.pc-menu', ov);
+  $('[data-d]', ov).onclick = () => menu.hidden = !menu.hidden;
+  $('[data-html]', ov).onclick = () => { menu.hidden = true; descargarHTML(id); };
+  $('[data-png]', ov).onclick = () => { menu.hidden = true; descargarPNG(); };
+  $('[data-x]', ov).onclick = () => { ov.hidden = true; document.body.classList.remove('sin-scroll'); if (charts.pc){ charts.pc.destroy(); delete charts.pc; } };
+}
+const nombreArchivo = t => 'mis-gastos-' + norm(t).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50) + '-' + hoyISO();
+async function descargarPNG(){
+  const c = charts.pc; if (!c) return;
+  const lienzo = document.createElement('canvas'); lienzo.width = c.canvas.width; lienzo.height = c.canvas.height;
+  const ctx = lienzo.getContext('2d'); ctx.fillStyle = cssVar('--surface') || '#fff'; ctx.fillRect(0, 0, lienzo.width, lienzo.height); ctx.drawImage(c.canvas, 0, 0);
+  const blob = await new Promise(r => lienzo.toBlob(r, 'image/png'));
+  compartirArchivo(nombreArchivo(fuentes.pc_t || $('#pc .pc-h b').textContent) + '.png', 'image/png', blob, 'Gráfica de Mis gastos');
+}
+/** Página web independiente con la gráfica interactiva y una tabla con los datos. */
+function descargarHTML(id){
+  const f = fuentes[id]; const cfg = f.cfg; const o = cfg.options || {};
+  const unidad = eje => { try { const cb = o.scales && o.scales[eje] && o.scales[eje].ticks && o.scales[eje].ticks.callback; return cb && String(cb(10)).includes('%') ? '%' : '€'; } catch(e){ return '€'; } };
+  const U = { x: unidad('x'), y: unidad('y'), y2: '%' };
+  const plano = JSON.parse(JSON.stringify({ type: cfg.type, data: cfg.data, options: o }, (k, v) => typeof v === 'function' ? undefined : v));
+  if (plano.options && plano.options.plugins) delete plano.options.plugins.zoom;
+  const horiz = o.indexAxis === 'y';
+  const fv = (v, u) => v === null || v === undefined ? '—' : u === '%' ? String(Math.round(v*100)/100).replace('.',',') + ' %' : fmt(v);
+  const ds = cfg.data.datasets;
+  const tabla = `<table><thead><tr><th></th>${ds.map(d => `<th>${esc(d.label||'')}</th>`).join('')}</tr></thead><tbody>${(cfg.data.labels||[]).map((l, i) =>
+    `<tr><td>${esc(l)}</td>${ds.map(d => `<td>${fv(d.data[i], d.yAxisID === 'y2' ? '%' : (horiz ? U.x : U.y))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const json = JSON.stringify(plano).replace(/</g, '\\u003c');
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(f.titulo)}</title>
+<style>body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:20px;color:#1B2433;background:#fff}h1{font-size:20px;margin:0 0 4px}p{color:#5D6878;margin:0 0 16px;font-size:14px}
+.g{position:relative;height:70vh;min-height:320px}table{border-collapse:collapse;margin-top:24px;font-size:14px;width:100%}th,td{padding:6px 8px;border-bottom:1px solid #E3E7ED;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}.t{overflow-x:auto}</style></head><body>
+<h1>${esc(f.titulo)}</h1><p>Exportado de Mis gastos el ${new Date().toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}</p>
+<div class="g"><canvas id="c"></canvas></div><div class="t">${tabla}</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"><\/script>
+<script>
+const cfg = ${json}; const U = ${JSON.stringify(U)}; const H = ${horiz};
+const f = (v, u) => u === '%' ? (Math.round(v*100)/100).toLocaleString('es-ES') + ' %' : Number(v).toLocaleString('es-ES', { style:'currency', currency:'EUR', maximumFractionDigits: Math.abs(v) >= 100 ? 0 : 2 });
+cfg.options = cfg.options || {}; cfg.options.maintainAspectRatio = false; cfg.options.responsive = true;
+const sc = cfg.options.scales || {};
+for (const k in sc){ const valor = k === 'y2' || (H ? k === 'x' : k === 'y'); if (valor){ sc[k].ticks = sc[k].ticks || {}; sc[k].ticks.callback = v => f(v, U[k] || '€'); } }
+cfg.options.plugins = cfg.options.plugins || {};
+const f2 = (v, u) => u === '%' ? f(v, u) : Number(v).toLocaleString('es-ES', { style:'currency', currency:'EUR' });
+cfg.options.plugins.tooltip = { callbacks: { label: x => ' ' + x.dataset.label + ': ' + f2(x.raw, x.dataset.yAxisID === 'y2' ? '%' : (H ? U.x : U.y)) } };
+if (window.Chart) new Chart(document.getElementById('c'), cfg); else document.querySelector('.g').innerHTML = '<p>Sin conexión no se puede dibujar la gráfica, pero tienes los datos en la tabla.</p>';
+<\/script></body></html>`;
+  compartirArchivo(nombreArchivo(f.titulo) + '.html', 'text/html', html, f.titulo);
 }
 function dona(id, items, mini){
   const tot = items.reduce((s,i)=>s+i.v,0) || 1;
@@ -1381,7 +1483,7 @@ function abrirAjustes(){
 /* ── Copia de seguridad ── */
 function nombreCopia(){ return 'mis-gastos-' + (D.perfil.nombre ? norm(D.perfil.nombre).replace(/[^a-z0-9]+/g,'-') + '-' : '') + hoyISO() + '.json'; }
 async function compartirArchivo(nombre, tipo, contenido, titulo){
-  const file = new File([contenido], nombre, { type: tipo });
+  const file = new File([contenido instanceof Blob ? contenido : String(contenido)], nombre, { type: tipo });
   if (navigator.canShare && navigator.canShare({ files:[file] })){
     try { await navigator.share({ files:[file], title: titulo }); return true; }
     catch(e){ if (e && e.name === 'AbortError') return false; }
