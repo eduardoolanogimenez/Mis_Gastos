@@ -378,7 +378,8 @@ const st = { tab:'apuntar', y:new Date().getFullYear(), m:new Date().getMonth(),
 function datosVacios(){
   return { app:APP, v:2, perfil:{ nombre:'', creado:new Date().toISOString() }, categorias:[], movs:[], recurrentes:[], presupuestos:{},
            inversiones:[], invMovs:[], reglas:[], importacion:{}, saldos:[], objetivos:[], grupos:[],
-           ajustes:{ tema:'auto', ultimaCopia:null, diasCopia:30, cotizUrl:'', inflacion:2.5 } };
+           ajustes:{ tema:'auto', ultimaCopia:null, diasCopia:30, cotizUrl:'', inflacion:2.5,
+                     informes:{ email:'', mensual:true, anual:true, modo:'correo', ultimo:null, ultimoAnio:null } } };
 }
 function cargar(){ try { const t = localStorage.getItem(CLAVE); return t ? migrar(JSON.parse(t)) : null; } catch(e){ return null; } }
 /** Pone al día los datos de versiones anteriores de la app (y de copias antiguas). */
@@ -388,6 +389,7 @@ function migrar(d){
   ['inversiones','invMovs','reglas','recurrentes','saldos','objetivos','grupos'].forEach(k => { if (!Array.isArray(d[k])) d[k] = []; });
   ['importacion','presupuestos'].forEach(k => { if (!d[k] || typeof d[k] !== 'object') d[k] = {}; });
   d.ajustes = { ...base.ajustes, ...(d.ajustes||{}) };
+  d.ajustes.informes = { ...base.ajustes.informes, ...((d.ajustes||{}).informes||{}) };
   const prop = {}; PROPUESTAS.g.forEach(x => prop[norm(x[1])] = x[3]);
   (d.categorias||[]).forEach(c => { if (c.tipo==='g' && !c.grupo) c.grupo = prop[norm(c.nombre)] || 'p'; });
   d.v = 2;
@@ -548,7 +550,7 @@ function render(){
 /* ════════════ Apuntar ════════════ */
 let apuntarSucio = false;
 function bannersArriba(){
-  let h = '';
+  let h = bannerInformes();
   const p = recPendientes();
   if (p.length) h += `<button type="button" class="banner" data-recpend><span><b>${p.length} ${p.length===1?'gasto fijo':'gastos fijos'}</b> de ${MESES[new Date().getMonth()].toLowerCase()} sin apuntar</span><span class="flecha">›</span></button>`;
   const dias = D.ajustes.ultimaCopia ? Math.floor((Date.now() - new Date(D.ajustes.ultimaCopia))/864e5) : null;
@@ -557,6 +559,9 @@ function bannersArriba(){
   return h;
 }
 function enlazarBanners(sec){
+  const inf = $('[data-informe]', sec);
+  if (inf) inf.onclick = async () => { const p = informesPendientes()[0]; if (!p) return;
+    try { await enviarInforme(generar(p)); marcar(p); render(); } catch(err){ toast(err.message, true); } };
   const r = $('[data-recpend]', sec); if (r) r.onclick = revisarRecurrentes;
   const c = $('[data-copia]', sec); if (c) c.onclick = ajustesCopia;
 }
@@ -1351,7 +1356,8 @@ function abrirAjustes(){
     ['pres','🎯','Presupuestos', Object.keys(D.presupuestos||{}).filter(k => D.presupuestos[k] > 0).length ? 'Límites mensuales configurados' : 'Pon un límite al mes'],
     ['fijos','🔁','Gastos fijos', (D.recurrentes||[]).length ? D.recurrentes.length + ' configurados' : 'Alquiler, luz, suscripciones…'],
     ['reglas','🪄','Reglas de categoría', (D.reglas||[]).length ? D.reglas.length + ' reglas' : 'Mercadona → Supermercado…'],
-    ['cotiz','💹','Cotizaciones', urlCotiz() ? 'Servicio configurado' : 'Sin configurar'],
+    ['informes','✉️','Informes por correo', D.ajustes.informes.email ? (D.ajustes.informes.modo==='servicio' ? 'Automático a ' : 'A ') + D.ajustes.informes.email : 'Sin configurar'],
+    ['cotiz','💹','Servicio de Google (cotizaciones y correo)', urlCotiz() ? 'Servicio configurado' : 'Sin configurar'],
     ['infl','📊','Inflación de referencia', String(D.ajustes.inflacion ?? 0).replace('.',',') + ' % anual'],
     ['tema','🌓','Apariencia', { auto:'Automática', light:'Clara', dark:'Oscura' }[D.ajustes.tema||'auto']],
     ['perfil','🙂','Tu nombre', D.perfil.nombre || 'Sin poner'],
@@ -1360,7 +1366,7 @@ function abrirAjustes(){
   const box = document.createElement('div');
   box.innerHTML = `<div class="grupo">${items.map(([k,e,t,d]) => `<button type="button" class="ajuste" data-a="${k}"><span class="e">${e}</span><span class="t"><b>${t}</b><small>${esc(d)}</small></span><span class="flecha">›</span></button>`).join('')}</div>
     <p class="hint" style="text-align:center;margin-top:16px">Tus datos están guardados solo en este móvil.</p>`;
-  const map = { cuenta:verCuenta, infl:ajustesInflacion, reglas:ajustesReglas, cotiz:ajustesCotiz, copia:ajustesCopia, cats:ajustesCats, pres:ajustesPres, fijos:ajustesFijos, tema:ajustesTema, perfil:ajustesPerfil, borrar:ajustesBorrar };
+  const map = { informes:ajustesInformes, cuenta:verCuenta, infl:ajustesInflacion, reglas:ajustesReglas, cotiz:ajustesCotiz, copia:ajustesCopia, cats:ajustesCats, pres:ajustesPres, fijos:ajustesFijos, tema:ajustesTema, perfil:ajustesPerfil, borrar:ajustesBorrar };
   box.querySelectorAll('[data-a]').forEach(b => b.onclick = () => map[b.dataset.a]());
   abrirSheet('Ajustes', box);
 }
@@ -1630,6 +1636,145 @@ function ajustesInflacion(){
   f.onsubmit = e => { e.preventDefault(); const v = evalExpr(f.elements.i.value); if (v === null || Number.isNaN(v)) return toast('Pon un porcentaje.', true);
     D.ajustes.inflacion = v; guardar(); toast('Guardado'); abrirAjustes(); render(); };
   enlazarVolver(f); abrirSheet('Inflación de referencia', f);
+}
+
+/* ════════════ Informes por correo ════════════ */
+const ymKey = (y, m) => y + '-' + String(m+1).padStart(2,'0');
+const mesAnterior = () => { const h = new Date(); let y = h.getFullYear(), m = h.getMonth() - 1; if (m < 0){ m = 11; y--; } return { y, m }; };
+const eurM = v => fmt(v).replace(/\u00a0/g, ' ');
+
+/** Datos del informe de un mes. */
+function datosInforme(y, m){
+  const r = mes(y, m), pm = m ? mes(y, m-1) : mes(y-1, 11), pa = mes(y-1, m);
+  const cats = Object.entries(r.cats).filter(([c]) => cat(c).tipo==='g').sort((a,b)=>b[1]-a[1]);
+  const pres = D.presupuestos||{};
+  const pasados = catsTipo('g').filter(c => pres[c.id] && (r.cats[c.id]||0) > pres[c.id]).map(c => ({ c, g: r.cats[c.id], p: pres[c.id] }));
+  const P = pendientes();
+  const saldo = saldoA(iso(new Date(y, m+1, 0)));
+  const fin = iso(new Date(y, m+1, 0)), ini = iso(new Date(y, m, 0));
+  const inv = invActivas().reduce((s,v) => s + estadoInv(v, fin).valor, 0), invIni = invActivas().reduce((s,v) => s + estadoInv(v, ini).valor, 0);
+  return { y, m, r, pm, pa, cats, pasados, P, saldo, inv, invIni, aInv: invNetoMes(y, m), sinAct: invSinActualizar() };
+}
+const difTxt = (a, b) => b ? ((a - b)/b*100 > 0 ? '+' : '') + ((a - b)/b*100).toFixed(1).replace('.',',') + ' %' : '';
+
+function informeMensual(y, m){
+  const d = datosInforme(y, m), r = d.r, nom = MESES[m].toLowerCase();
+  const asunto = nom + ' ' + y + ': ' + eurM(r.g) + ' gastados';
+  const fila = (a, b, c) => `<tr><td style="padding:7px 0;color:#5D6878;border-bottom:1px solid #E3E7ED">${a}</td><td style="padding:7px 0;text-align:right;font-weight:700;border-bottom:1px solid #E3E7ED">${b}${c ? ` <span style="font-weight:400;color:${c.startsWith('+') ? '#C62828' : '#0E7C66'}">(${c})</span>` : ''}</td></tr>`;
+  let h = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;color:#1B2433;font-size:15px">
+    <h2 style="margin:0 0 4px">Tus gastos de ${nom} de ${y}</h2>${D.perfil.nombre ? `<p style="margin:0;color:#5D6878">${esc(D.perfil.nombre)}</p>` : ''}
+    <p style="font-size:32px;font-weight:700;margin:12px 0 4px">${eurM(r.g)}</p>
+    <p style="margin:0 0 12px;color:#5D6878">Básico ${eurM(r.b)} · Personal ${eurM(r.p)}</p>
+    <table style="width:100%;border-collapse:collapse">${fila('Ingresos', eurM(r.i))}${fila('Ahorro', eurM(r.ahorro) + (r.i ? ' (' + Math.round(r.ahorro/r.i*100) + ' %)' : ''))}
+    ${d.saldo !== null ? fila('Saldo en la cuenta a fin de mes', eurM(d.saldo)) : ''}${d.aInv ? fila('Llevado a ahorro e inversión', eurM(d.aInv)) : ''}
+    ${d.pm.n ? fila('Frente al mes anterior', eurM(d.pm.g), difTxt(r.g, d.pm.g)) : ''}${d.pa.n ? fila('Frente a ' + nom + ' de ' + (y-1), eurM(d.pa.g), difTxt(r.g, d.pa.g)) : ''}</table>
+    <h3 style="margin:22px 0 6px">En qué se fue</h3><table style="width:100%;border-collapse:collapse">${d.cats.slice(0,8).map(([c,v]) => fila(cat(c).emoji + ' ' + esc(cat(c).nombre), eurM(v))).join('')}</table>`;
+  if (d.pasados.length) h += `<h3 style="margin:22px 0 6px;color:#C62828">Presupuestos superados</h3><p style="margin:0">${d.pasados.map(x => esc(x.c.nombre) + ': ' + eurM(x.g) + ' de ' + eurM(x.p)).join('<br>')}</p>`;
+  if (d.P.deudas.length || d.P.reem.length) h += `<h3 style="margin:22px 0 6px">Pendiente de cobrar</h3><p style="margin:0">${d.P.deudas.length ? 'Te deben ' + eurM(d.P.tD) + ' de gastos compartidos.<br>' : ''}${d.P.reem.length ? 'Gastos de trabajo pendientes: ' + eurM(d.P.tR) + '.' : ''}</p>`;
+  if (invActivas().length) h += `<h3 style="margin:22px 0 6px">Ahorro e inversión</h3><p style="margin:0">Valen ${eurM(d.inv)} a fin de mes (${d.inv - d.invIni >= 0 ? '+' : ''}${eurM(d.inv - d.invIni)} en el mes).${d.sinAct.length ? '<br>Sin actualizar desde hace más de un mes: ' + d.sinAct.map(v => esc(v.nombre)).join(', ') + '.' : ''}</p>`;
+  h += `<p style="color:#5D6878;font-size:13px;margin-top:24px">Enviado por la app Mis gastos.</p></div>`;
+  const t = [`Tus gastos de ${nom} de ${y}`, ' ', 'Gastado: ' + eurM(r.g) + ' (básico ' + eurM(r.b) + ', personal ' + eurM(r.p) + ')', 'Ingresos: ' + eurM(r.i),
+    'Ahorro: ' + eurM(r.ahorro) + (r.i ? ' (' + Math.round(r.ahorro/r.i*100) + ' %)' : ''), d.saldo !== null ? 'Saldo en la cuenta a fin de mes: ' + eurM(d.saldo) : '',
+    d.pm.n ? 'Frente al mes anterior: ' + difTxt(r.g, d.pm.g) : '', d.pa.n ? 'Frente a ' + nom + ' de ' + (y-1) + ': ' + difTxt(r.g, d.pa.g) : '',
+    ' ', 'En qué se fue:', ...d.cats.slice(0,8).map(([c,v]) => '· ' + cat(c).nombre + ': ' + eurM(v)),
+    d.pasados.length ? '\nPresupuestos superados: ' + d.pasados.map(x => x.c.nombre + ' ' + eurM(x.g) + ' de ' + eurM(x.p)).join(', ') : '',
+    d.P.deudas.length ? '\nTe deben ' + eurM(d.P.tD) + '.' : '', invActivas().length ? '\nAhorro e inversión: ' + eurM(d.inv) + ' a fin de mes.' : ''].filter(x => x !== '').join('\n');
+  return { asunto, html: h, texto: t };
+}
+
+function informeAnual(y){
+  const ms = [...Array(12).keys()].map(i => mes(y, i)); const con = ms.map((r,i) => r.n ? i : -1).filter(i => i >= 0);
+  const sum = f => con.reduce((s,i) => s + f(i), 0);
+  const g = sum(i => ms[i].g), ing = sum(i => ms[i].i), gP = sum(i => mes(y-1,i).g);
+  const caro = con.reduce((b,i) => b<0 || ms[i].g > ms[b].g ? i : b, -1), barato = con.reduce((b,i) => b<0 || ms[i].g < ms[b].g ? i : b, -1);
+  const cats = {}; con.forEach(i => Object.entries(ms[i].cats).forEach(([c,v]) => { if (cat(c).tipo==='g') cats[c] = (cats[c]||0) + v; }));
+  const top = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const grandes = D.movs.filter(x => x.t==='g' && !x.reem && x.fecha.startsWith(y + '-')).sort((a,b)=>b.imp-a.imp).slice(0,5);
+  const asunto = 'tu ' + y + ' en números: ' + eurM(g) + ' gastados, ' + eurM(ing - g) + ' ahorrados';
+  const fila = (a, b) => `<tr><td style="padding:7px 0;color:#5D6878;border-bottom:1px solid #E3E7ED">${a}</td><td style="padding:7px 0;text-align:right;font-weight:700;border-bottom:1px solid #E3E7ED">${b}</td></tr>`;
+  const h = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;color:#1B2433;font-size:15px"><h2 style="margin:0">Tu ${y} en números</h2>
+    <table style="width:100%;border-collapse:collapse;margin-top:12px">${fila('Gastado', eurM(g) + (gP ? ' (' + difTxt(g, gP) + ' frente a ' + (y-1) + ')' : ''))}${fila('Ingresado', eurM(ing))}
+    ${fila('Ahorrado', eurM(ing - g) + (ing ? ' (' + Math.round((ing-g)/ing*100) + ' %)' : ''))}${caro >= 0 ? fila('Mes más caro', MESES[caro] + ' · ' + eurM(ms[caro].g)) + fila('Mes más barato', MESES[barato] + ' · ' + eurM(ms[barato].g)) : ''}</table>
+    <h3 style="margin:22px 0 6px">Donde más gastaste</h3><table style="width:100%;border-collapse:collapse">${top.map(([c,v]) => fila(cat(c).emoji + ' ' + esc(cat(c).nombre), eurM(v))).join('')}</table>
+    ${grandes.length ? `<h3 style="margin:22px 0 6px">Tus 5 gastos más grandes</h3><p style="margin:0">${grandes.map(x => esc(cat(x.cat).nombre) + (x.com ? ' · ' + esc(x.com) : '') + ': ' + eurM(x.imp)).join('<br>')}</p>` : ''}
+    <p style="color:#5D6878;font-size:13px;margin-top:24px">Tienes el resumen completo en la app Mis gastos (Resumen → Año).</p></div>`;
+  const t = [`Tu ${y} en números`, ' ', 'Gastado: ' + eurM(g) + (gP ? ' (' + difTxt(g, gP) + ' frente a ' + (y-1) + ')' : ''), 'Ingresado: ' + eurM(ing), 'Ahorrado: ' + eurM(ing - g),
+    caro >= 0 ? 'Mes más caro: ' + MESES[caro] + ' (' + eurM(ms[caro].g) + ')' : '', ' ', 'Donde más gastaste:', ...top.map(([c,v]) => '· ' + cat(c).nombre + ': ' + eurM(v))].filter(x => x !== '').join('\n');
+  return { asunto, html: h, texto: t };
+}
+
+const enlaceCorreo = (para, inf) => 'mailto:' + encodeURIComponent(para) + '?subject=' + encodeURIComponent('Mis gastos · ' + inf.asunto) + '&body=' + encodeURIComponent(inf.texto);
+function abrirCorreo(url){ location.href = url; }
+/** Envía un informe: con el servicio de Google, o abriendo el correo del móvil ya escrito. */
+async function enviarInforme(inf, silencioso){
+  const I = D.ajustes.informes;
+  if (!I.email) throw new Error('Pon primero a qué correo enviarlo (Ajustes → Informes por correo).');
+  if (I.modo === 'servicio'){
+    const u = urlCotiz(); if (!u) throw new Error('Falta la dirección del servicio de Google (Ajustes → Cotizaciones).');
+    const r = await fetch(u, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify({ accion:'correo', para:I.email, asunto:inf.asunto, html:inf.html, texto:inf.texto }) });
+    const j = await r.json().catch(() => null);
+    if (!j || !j.ok) throw new Error((j && j.error) || 'El servicio no ha podido enviar el correo.');
+    if (!silencioso) toast('Informe enviado a ' + I.email);
+    return true;
+  }
+  abrirCorreo(enlaceCorreo(I.email, inf));
+  return true;
+}
+
+/** Al abrir la app en un mes nuevo: envía (o prepara) el informe del mes anterior y, en enero, el del año. */
+function informesPendientes(){
+  const I = D.ajustes.informes; if (!I.email) return [];
+  const a = mesAnterior(); const out = [];
+  if (I.mensual && I.ultimo !== ymKey(a.y, a.m) && mes(a.y, a.m).n) out.push({ tipo:'mes', y:a.y, m:a.m, et: MESES[a.m].toLowerCase() + ' ' + a.y });
+  if (I.anual && a.m === 11 && I.ultimoAnio !== a.y && mes(a.y, 11).n) out.push({ tipo:'anio', y:a.y, et: 'resumen de ' + a.y });
+  return out;
+}
+const generar = p => p.tipo === 'mes' ? informeMensual(p.y, p.m) : informeAnual(p.y);
+const marcar = p => { if (p.tipo === 'mes') D.ajustes.informes.ultimo = ymKey(p.y, p.m); else D.ajustes.informes.ultimoAnio = p.y; guardar(); };
+async function informesAuto(){
+  const I = D.ajustes.informes; if (I.modo !== 'servicio' || !navigator.onLine) return;
+  for (const p of informesPendientes()){
+    try { await enviarInforme(generar(p), true); marcar(p); toast('Informe de ' + p.et + ' enviado a ' + I.email); }
+    catch(e){ return; }
+  }
+  if (st.tab === 'apuntar') renderApuntar(true);
+}
+function bannerInformes(){
+  const I = D.ajustes.informes; if (I.modo === 'servicio') return '';
+  const ps = informesPendientes(); if (!ps.length) return '';
+  return `<button type="button" class="banner" data-informe><span><b>Tu informe de ${ps[0].et} está listo.</b> Tócalo para enviarlo a ${esc(I.email)}.</span><span class="flecha">›</span></button>`;
+}
+
+function ajustesInformes(){
+  const I = D.ajustes.informes; const a = mesAnterior(); const hayServ = !!urlCotiz();
+  const f = document.createElement('form'); f.noValidate = true;
+  f.innerHTML = `<p class="hint">Al empezar cada mes, la app prepara el informe del mes anterior (y en enero, el resumen del año).</p>
+    <label class="campo"><span>Enviar a</span><input name="e" type="email" inputmode="email" autocomplete="email" value="${esc(I.email||'')}" placeholder="tu-correo@gmail.com"></label>
+    <label class="chk" style="margin-top:14px"><input type="checkbox" name="m" ${I.mensual?'checked':''}> Informe de cada mes</label>
+    <label class="chk" style="margin-top:10px"><input type="checkbox" name="a" ${I.anual?'checked':''}> Resumen del año, en enero</label>
+    <label class="campo"><span>Cómo se envía</span></label>
+    <div class="grupo">
+      <label class="ajuste"><input type="radio" name="modo" value="correo" ${I.modo!=='servicio'?'checked':''} style="width:20px;height:20px;accent-color:var(--acento)"><span class="t"><b>Desde el correo del móvil</b><small>Te aviso cuando esté listo y se abre tu app de correo con todo escrito: solo pulsas Enviar.</small></span></label>
+      <label class="ajuste"><input type="radio" name="modo" value="servicio" ${I.modo==='servicio'?'checked':''} ${hayServ?'':'disabled'} style="width:20px;height:20px;accent-color:var(--acento)"><span class="t"><b>Automático</b><small>${hayServ ? 'Se envía solo, con el servicio de Google de quien te instaló la app. Tu dirección tiene que estar autorizada en ese servicio.' : 'Necesita el servicio de Google (Ajustes → Cotizaciones).'}</small></span></label>
+    </div>
+    <button class="btn primary" type="submit">Guardar</button>
+    <h2>Enviar ahora</h2>
+    <button class="btn ghost" type="button" data-env="mes">Informe de ${MESES[a.m].toLowerCase()} ${a.y}</button>
+    <button class="btn ghost" type="button" data-env="esteMes">Lo que llevas de ${MESES[new Date().getMonth()].toLowerCase()}</button>
+    <button class="btn ghost" type="button" data-env="anio">Resumen de ${new Date().getMonth() < 2 ? new Date().getFullYear()-1 : new Date().getFullYear()}</button>
+    <button class="btn ghost" type="button" data-ver>Ver cómo queda el informe</button>${volver()}`;
+  const leer = () => ({ ...I, email: f.elements.e.value.trim(), mensual: f.elements.m.checked, anual: f.elements.a.checked, modo: f.querySelector('[name=modo]:checked').value });
+  const valido = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+  f.onsubmit = e => { e.preventDefault(); const n = leer(); if (n.email && !valido(n.email)) return toast('Revisa la dirección de correo.', true);
+    D.ajustes.informes = n; guardar(); toast('Guardado'); abrirAjustes(); };
+  f.querySelectorAll('[data-env]').forEach(b => b.onclick = async () => {
+    const n = leer(); if (!valido(n.email)) return toast('Pon una dirección de correo válida.', true); D.ajustes.informes = n; guardar();
+    const h = new Date(); const k = b.dataset.env;
+    const inf = k==='mes' ? informeMensual(a.y, a.m) : k==='esteMes' ? informeMensual(h.getFullYear(), h.getMonth()) : informeAnual(h.getMonth() < 2 ? h.getFullYear()-1 : h.getFullYear());
+    const t = b.textContent; b.disabled = true; b.textContent = 'Enviando…';
+    try { await enviarInforme(inf); } catch(err){ toast(err.message, true); } b.disabled = false; b.textContent = t; });
+  $('[data-ver]', f).onclick = () => { const box = document.createElement('div'); box.innerHTML = `<div class="panel" style="background:#fff;color:#1B2433">${informeMensual(a.y, a.m).html}</div>`; abrirSheet('Así se ve el informe', box); };
+  enlazarVolver(f); abrirSheet('Informes por correo', f);
 }
 
 /* ════════════ Reglas de categoría ════════════ */
@@ -2101,7 +2246,7 @@ function autoCotizar(){
 
 /* ════════════ Arranque ════════════ */
 function iniciar(){
-  aplicarTema(); aplicarFijosAuto();
+  aplicarTema(); aplicarFijosAuto(); setTimeout(informesAuto, 1500);
   const h = new Date(); st.y = h.getFullYear(); st.m = h.getMonth();
   irA('apuntar');
 }
