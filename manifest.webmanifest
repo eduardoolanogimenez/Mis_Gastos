@@ -1,0 +1,17 @@
+{
+  "name": "Mis gastos",
+  "short_name": "Mis gastos",
+  "description": "Apunta tus gastos e ingresos y mira en qué se va el dinero. Los datos se guardan en tu móvil.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EEF1F5",
+  "theme_color": "#0E7C66",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
