@@ -324,6 +324,18 @@ body.sin-scroll{overflow:hidden}
 .objetivo .bar{display:block;height:9px;border-radius:5px;background:var(--line);overflow:hidden;margin:8px 0 5px}
 .objetivo .bar i{display:block;height:100%;background:var(--acento)}
 .objetivo small{color:var(--muted);font-size:13.5px}
+/* Simulador */
+.sim-res{background:var(--surface);border-radius:var(--r-lg);padding:14px;margin:10px 0}
+.sim-pre{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 12px}
+.sim-f{padding:10px 0;border-bottom:1px solid var(--line)}
+.sim-f:last-of-type{border-bottom:0}
+.sim-l,.sim-d{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.sim-l{font-size:16px}
+.sim-l [data-v]{font-size:14px;color:var(--muted);white-space:nowrap}
+.sim-d{font-size:13.5px;color:var(--muted)}
+.sim-f input[type=range]{width:100%;margin:8px 0 4px;accent-color:var(--acento);height:28px}
+.punto{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:1px}
+.sim-obj{margin:0;padding-left:18px;font-size:15.5px;line-height:1.7}
 @media (prefers-reduced-motion:reduce){.sheet,.toast{transition:none}}
 </style>
 </head>
@@ -978,6 +990,7 @@ function renderResumen(){
       <div class="tres num"><div><small>Ingresos</small><b>${fmt0(ing)}</b></div><div><small>Ahorro</small><b class="${ing-g>=0?'down':'up'}">${fmt0(ing-g)}</b>${ing ? `<em>${Math.round((ing-g)/ing*100)} %</em>` : ''}</div><div><small>Media al mes</small><b>${con ? fmt0(g/con) : '—'}</b></div></div>
       ${barraGrupos({ g, b: ms.reduce((s,x)=>s+x.b,0), p: ms.reduce((s,x)=>s+x.p,0) })}
       <button class="btn primary" type="button" id="btnAnioNum">Tu ${st.y} en números</button>
+      <button class="btn ghost" type="button" id="btnSimR">✂️ Simulador de recortes</button>
       ${previsionAnioHTML(st.y)}${heatmapHTML(st.y)}${inflacionHTML(st.y)}
       <h2>Reparto por año</h2><div class="anios-rep">${ys.map(y => { const t = [...Array(12).keys()].map(i => mes(y,i)).reduce((a,x) => ({ i:a.i+x.i, g:a.g+x.g, b:a.b+x.b, p:a.p+x.p, n:a.n+x.n }), { i:0,g:0,b:0,p:0,n:0 });
         if (!t.n) return ''; const it = itemsReparto(t); pend.push(['ry'+y, it.items, true]); const tot = it.items.reduce((s,x)=>s+x.v,0) || 1;
@@ -1001,6 +1014,7 @@ function renderResumen(){
   enlazarBanners(sec); enlazarSaldo(sec);
   const ia = $('[data-irahorro]', sec); if (ia) ia.onclick = () => irA('ahorro');
   const an = $('#btnAnioNum', sec); if (an) an.onclick = () => anioEnNumeros(st.y);
+  const sr = $('#btnSimR', sec); if (sr) sr.onclick = simulador;
   const bc = $('#btnCesta', sec); if (bc) bc.onclick = editarCesta;
   dibujarDia(sec);
   pend.forEach(([id, items, mini]) => dona(id, items, mini));
@@ -1747,6 +1761,89 @@ function ajustesInflacion(){
   enlazarVolver(f); abrirSheet('Inflación de referencia', f);
 }
 
+/* ════════════ Simulador de recortes ════════════ */
+/** Media mensual de gasto por categoría en los últimos 12 meses cerrados (solo meses con datos). */
+function baseSimulador(){
+  const h = new Date(); let y = h.getFullYear(), m = h.getMonth(); const ms = [];
+  for (let k = 0; k < 12; k++){ m--; if (m < 0){ m = 11; y--; } const r = mes(y, m); if (r.n) ms.push(r); }
+  if (!ms.length) return null;
+  const n = ms.length, por = {};
+  ms.forEach(r => Object.entries(r.cats).forEach(([c, v]) => { if (cat(c).tipo === 'g') por[c] = (por[c]||0) + v; }));
+  const cats = Object.entries(por).map(([c, v]) => ({ c, m: v/n })).filter(x => x.m >= 1).sort((a,b) => b.m - a.m);
+  return { n, cats, g: ms.reduce((s,r)=>s+r.g,0)/n, i: ms.reduce((s,r)=>s+r.i,0)/n };
+}
+/** Valor futuro de aportar A € cada mes durante 'meses' a una rentabilidad anual r (%). */
+const valorFuturo = (A, meses, r) => { const i = Math.pow(1 + r/100, 1/12) - 1; return i ? A * (Math.pow(1+i, meses) - 1) / i : A * meses; };
+
+function simulador(){
+  const B = baseSimulador();
+  const box = document.createElement('div');
+  if (!B){ box.innerHTML = '<div class="vacio">Necesito al menos un mes completo con gastos apuntados para poder simular.</div>'; return abrirSheet('Simulador de recortes', box); }
+  const S = D.ajustes.simulador = { rec:{}, anios:10, rent:5, todas:false, ...(D.ajustes.simulador||{}) };
+  const infl = Number(D.ajustes.inflacion) || 0;
+  const fila = x => { const c = cat(x.c); const v = S.rec[x.c] || 0;
+    return `<div class="sim-f" data-c="${x.c}"><div class="sim-l"><span><i class="punto" style="background:${GRUPOS[c.grupo||'p'].color}"></i>${c.emoji} <b>${esc(c.nombre)}</b></span><span class="num" data-v>${v ? '−' + v + ' %' : 'sin recorte'}</span></div>
+      <input type="range" min="0" max="100" step="5" value="${v}" aria-label="Recorte en ${esc(c.nombre)}">
+      <div class="sim-d num"><span>Gastas ${fmt0(x.m)} al mes</span><span data-a></span></div></div>`; };
+  box.innerHTML = `
+    <p class="hint" style="margin-top:0">Parte de lo que gastas de media al mes (últimos ${B.n} meses). Mueve las barras para decidir cuánto recortarías en cada categoría.</p>
+    <div class="sim-res"><div class="cifra" style="margin:0"><div class="label">Ahorrarías</div><div class="valor num" data-mes>0 €</div></div>
+      <p class="comparas" data-anio style="margin-top:2px"></p><p class="comparas" data-tasa></p></div>
+    <div class="sim-pre"><button type="button" class="fchip" data-p="p10">−10 % personal</button><button type="button" class="fchip" data-p="p20">−20 % personal</button><button type="button" class="fchip" data-p="t10">−10 % en todo</button><button type="button" class="fchip" data-p="0">Quitar recortes</button></div>
+    <div class="panel sim-lista">${B.cats.slice(0, S.todas ? 999 : 8).map(fila).join('')}
+      ${B.cats.length > 8 ? `<button type="button" class="link" data-todas style="margin-top:10px">${S.todas ? 'Ver solo las 8 principales' : 'Ver las ' + B.cats.length + ' categorías'}</button>` : ''}</div>
+    <h2>Si lo inviertes</h2>
+    <div class="panel"><div class="fila2" style="margin-top:-6px">
+      <label class="campo"><span>Durante (años)</span><input name="an" inputmode="numeric" value="${S.anios}"></label>
+      <label class="campo"><span>Rentabilidad anual (%)</span><input name="re" inputmode="decimal" value="${String(S.rent).replace('.',',')}"></label></div>
+      <div class="kpis num" style="margin:14px 0 0" data-fut></div>
+      <div class="chart-box" style="height:200px;margin-top:10px"><canvas id="cSim"></canvas></div>
+      <p class="hint">Es una estimación: la rentabilidad no está garantizada y cambia cada año. Un 0 % equivale a guardarlo sin invertir. "En euros de hoy" descuenta un ${String(infl).replace('.',',')} % de inflación al año.</p></div>
+    <div data-obj></div>`;
+
+  const calc = () => {
+    const ahorroMes = B.cats.reduce((s,x) => s + x.m * (S.rec[x.c]||0)/100, 0);
+    const cambiado = Object.values(S.rec).some(v => v > 0);
+    $('[data-mes]', box).textContent = fmt0(ahorroMes) + ' al mes';
+    $('[data-anio]', box).innerHTML = cambiado ? `Son <b>${fmt0(ahorroMes*12)} al año</b>. Pasarías de gastar ${fmt0(B.g)} a ${fmt0(B.g - ahorroMes)} al mes.` : 'Elige algún recorte para ver el efecto.';
+    const tA = B.i ? (B.i - B.g)/B.i*100 : null, tN = B.i ? (B.i - B.g + ahorroMes)/B.i*100 : null;
+    $('[data-tasa]', box).innerHTML = B.i && cambiado ? `Tu tasa de ahorro pasaría del <b>${Math.round(tA)} %</b> al <b class="down">${Math.round(tN)} %</b> de lo que ingresas.` : '';
+    box.querySelectorAll('.sim-f').forEach(f => { const x = B.cats.find(y => y.c === f.dataset.c); const v = S.rec[x.c]||0;
+      f.querySelector('[data-v]').textContent = v ? '−' + v + ' %' : 'sin recorte';
+      f.querySelector('[data-a]').innerHTML = v ? `<b class="down">+${fmt0(x.m*v/100*12)} al año</b>` : ''; });
+    const an = Math.max(1, Math.min(40, Math.round(evalExpr(box.querySelector('[name=an]').value) || 10)));
+    const re = evalExpr(box.querySelector('[name=re]').value); const rent = Number.isNaN(re) || re === null ? 0 : Math.max(-10, Math.min(20, re));
+    S.anios = an; S.rent = rent;
+    const apor = ahorroMes * 12 * an, vf = valorFuturo(ahorroMes, an*12, rent), hoy = vf / Math.pow(1 + infl/100, an);
+    $('[data-fut]', box).innerHTML = `<div><small>Apartarías en ${an} años</small><b>${fmt0(apor)}</b></div><div><small>Con la rentabilidad</small><b class="down">${fmt0(vf)}</b><em>+${fmt0(vf - apor)} de ganancia</em></div>
+      <div><small>En euros de hoy</small><b>${fmt0(hoy)}</b><em>lo que podrías comprar hoy con eso</em></div><div><small>Al mes</small><b>${fmt0(ahorroMes)}</b><em>durante ${an*12} meses</em></div>`;
+    const anios_ = [...Array(an+1).keys()];
+    dibujar('sim', $('#cSim', box), { type:'line', data:{ labels: anios_.map(k => k ? 'Año ' + k : 'Hoy'), datasets:[
+      { label:'Con rentabilidad', data: anios_.map(k => Math.round(valorFuturo(ahorroMes, k*12, rent))), borderColor: cssVar('--acento'), backgroundColor: cssVar('--acento') + '22', fill:true, borderWidth:3, pointRadius:0, tension:.25 },
+      { label:'Solo lo apartado', data: anios_.map(k => Math.round(ahorroMes*12*k)), borderColor: cssVar('--muted'), borderDash:[5,4], borderWidth:2, pointRadius:0 } ] },
+      options:{ maintainAspectRatio:false, interaction:{ mode:'index', intersect:false }, plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, boxHeight:10 } }, tooltip:{ callbacks:{ label:x => ' ' + x.dataset.label + ': ' + fmt0(x.raw) } } },
+        scales:{ y:{ ticks:{ callback:v=>fmt0(v), maxTicksLimit:5 } }, x:{ grid:{ display:false }, ticks:{ maxTicksLimit:6 } } } } });
+    // Objetivos: cuántos meses antes llegarías
+    const os = (D.objetivos||[]).filter(o => !o.fecha); const ritmo0 = Math.max(0, B.i - B.g);
+    const tot = invActivas().reduce((s,v)=>s+estadoInv(v).valor,0), cta = saldoHoy();
+    const lineas = os.map(o => { const falta = Math.max(0, (Number(o.meta)||0) - valorObjetivo(o, tot, cta)); if (!falta) return null;
+      const r0 = Number(o.aporte) > 0 ? Number(o.aporte) : ritmo0, r1 = r0 + ahorroMes; if (!(r1 > 0)) return null;
+      const m0 = r0 > 0 ? Math.ceil(falta/r0) : null, m1 = Math.ceil(falta/r1);
+      return `<li><b>${esc(o.nombre)}</b>: ${m0 === null ? 'lo conseguirías en ' + m1 + ' meses' : m0 - m1 > 0 ? '<b class="down">' + (m0 - m1) + (m0 - m1 === 1 ? ' mes' : ' meses') + ' antes</b> (en ' + m1 + ' en vez de ' + m0 + ')' : 'casi igual'}</li>`; }).filter(Boolean);
+    $('[data-obj]', box).innerHTML = cambiado && lineas.length ? `<h2>Tus objetivos</h2><div class="panel"><ul class="sim-obj">${lineas.join('')}</ul></div>` : '';
+    guardarSim();
+  };
+  let tGuardar; const guardarSim = () => { clearTimeout(tGuardar); tGuardar = setTimeout(() => { try { localStorage.setItem(CLAVE, JSON.stringify(D)); } catch(e){} }, 400); };
+  box.querySelectorAll('.sim-f input').forEach(r => r.oninput = () => { S.rec[r.closest('.sim-f').dataset.c] = Number(r.value); calc(); });
+  box.querySelectorAll('[name=an],[name=re]').forEach(i => i.oninput = calc);
+  box.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { const k = b.dataset.p;
+    B.cats.forEach(x => { const g = cat(x.c).grupo || 'p'; S.rec[x.c] = k === '0' ? 0 : k === 't10' ? 10 : (g === 'p' ? (k === 'p10' ? 10 : 20) : (S.rec[x.c]||0)); });
+    box.querySelectorAll('.sim-f').forEach(f => f.querySelector('input').value = S.rec[f.dataset.c] || 0); calc(); });
+  const bt = $('[data-todas]', box); if (bt) bt.onclick = () => { S.todas = !S.todas; simulador(); };
+  abrirSheet('Simulador de recortes', box);
+  calc();
+}
+
 /* ════════════ Informes por correo ════════════ */
 const ymKey = (y, m) => y + '-' + String(m+1).padStart(2,'0');
 const mesAnterior = () => { const h = new Date(); let y = h.getFullYear(), m = h.getMonth() - 1; if (m < 0){ m = 11; y--; } return { y, m }; };
@@ -2166,8 +2263,9 @@ function renderAhorro(){
   if (!vs.length){
     sec.innerHTML = `<div class="vacio" style="padding-top:20px"><p style="font-size:40px;margin:0">🐷</p>
       <p>Aquí puedes seguir el dinero que apartas: cuentas de ahorro, fondos de inversión o acciones. Verás cuánto has metido, cuánto vale ahora y lo que has ganado.</p>
-      <button class="btn primary" type="button" id="nInv">Añadir cuenta o inversión</button></div>`;
-    $('#nInv').onclick = () => editarInv(); return;
+      <button class="btn primary" type="button" id="nInv">Añadir cuenta o inversión</button>
+      <button class="btn ghost" type="button" id="bSim">✂️ Simulador de recortes</button></div>`;
+    $('#nInv').onclick = () => editarInv(); $('#bSim').onclick = simulador; return;
   }
   const E = vs.map(v => ({ v, e: estadoInv(v) }));
   const total = E.reduce((s,x)=>s+x.e.valor,0), apo = E.reduce((s,x)=>s+x.e.aportado,0), gan = E.reduce((s,x)=>s+x.e.gan,0);
@@ -2182,6 +2280,7 @@ function renderAhorro(){
     <h2>Evolución</h2>
     <div class="rango">${[['12m','12 meses'],['todo','Todo']].map(([k,l]) => `<button type="button" data-r="${k}" aria-pressed="${st.rangoInv===k}">${l}</button>`).join('')}</div>
     <div class="panel"><div class="chart-box" style="height:240px"><canvas id="cInv"></canvas></div></div>
+    <button type="button" class="banner" id="bSim"><span>✂️ <b>Simulador de recortes</b>: ¿cuánto ahorrarías gastando un poco menos?</span><span class="flecha">›</span></button>
     ${objetivosHTML(total, cta)}
     <h2>Tus cuentas e inversiones</h2>
     <div class="grupo">${E.map(({v,e}) => `<button type="button" class="inv" data-i="${v.id}"><span class="emo" style="background:color-mix(in srgb, ${v.color} 16%, transparent)">${v.emoji || TIPOS_INV[v.tipo].e}</span>
@@ -2194,6 +2293,7 @@ function renderAhorro(){
   $('#nInv').onclick = () => editarInv();
   const bc = $('#btnCot'); if (bc) bc.onclick = () => cotizarAhora(bc);
   sec.querySelectorAll('[data-obj]').forEach(b => b.onclick = () => editarObjetivo(D.objetivos.find(o => o.id===b.dataset.obj)));
+  const bs = $('#bSim', sec); if (bs) bs.onclick = simulador;
   const no = $('#nObj', sec); if (no) no.onclick = () => editarObjetivo();
   let meses = mesesInv(vs.map(v => v.id)); if (st.rangoInv==='12m') meses = meses.slice(-12);
   dibujar('inv', $('#cInv'), { type:'line', data:{ labels: meses.map(x => MC[x.m] + ' ' + String(x.y).slice(2)),
