@@ -373,6 +373,40 @@ body.sin-scroll{overflow:hidden}
 .cta-sel button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);font-weight:700}
 .cta-sel i{width:9px;height:9px;border-radius:50%;display:inline-block}
 .tr-i{color:var(--muted)}
+/* Ayuda, primeros pasos y bloqueo */
+.ayuda-b{font-size:17px;font-weight:700;border:2px solid var(--line);width:32px;height:32px;margin-right:2px;color:var(--muted)}
+.ayuda details{background:var(--surface);border-radius:12px;margin-bottom:8px;padding:0 14px}
+.ayuda summary{padding:14px 0;font-weight:700;font-size:16px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:10px}
+.ayuda summary::-webkit-details-marker{display:none}
+.ayuda summary::after{content:'+';color:var(--acento);font-size:20px;line-height:1}
+.ayuda details[open] summary::after{content:'−'}
+.ayuda details p{margin:0 0 14px;font-size:15.5px;line-height:1.55;color:var(--ink)}
+.guia,.bloqueo{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;padding:calc(20px + env(safe-area-inset-top,0px)) 22px calc(24px + env(safe-area-inset-bottom,0px))}
+.guia{z-index:65}
+.bloqueo{z-index:90;align-items:center;justify-content:center;text-align:center}
+.guia .saltar{align-self:flex-end;border:0;background:none;color:var(--muted);font-size:15.5px;padding:8px;cursor:pointer}
+.guia .paso{flex:1;display:flex;flex-direction:column;justify-content:center;max-width:520px;margin:0 auto;width:100%}
+.guia .ilus{font-size:64px;line-height:1;margin-bottom:18px}
+.guia h2{font-size:28px;margin:0 0 12px;line-height:1.2}
+.guia p{font-size:17px;line-height:1.55;color:var(--muted);margin:0 0 10px}
+.guia ul{margin:6px 0 0;padding-left:20px;font-size:16.5px;line-height:1.6}
+.guia .puntos{display:flex;gap:8px;justify-content:center;margin:18px 0}
+.guia .puntos i{width:9px;height:9px;border-radius:50%;background:var(--line)}
+.guia .puntos i.on{background:var(--acento);width:24px;border-radius:5px}
+.guia .botones{display:flex;gap:10px;max-width:520px;margin:0 auto;width:100%}
+.guia .botones .btn{margin-top:0}
+.bloqueo .candado{font-size:44px;margin-bottom:8px}
+.bloqueo h2{margin:0 0 6px;font-size:22px}
+.bloqueo .pin-p{display:flex;gap:14px;justify-content:center;margin:22px 0 10px}
+.bloqueo .pin-p i{width:15px;height:15px;border-radius:50%;border:2px solid var(--ink)}
+.bloqueo .pin-p i.on{background:var(--ink)}
+.bloqueo .error{color:var(--neg);min-height:22px;font-size:15px;margin:0 0 6px}
+.teclado{display:grid;grid-template-columns:repeat(3,76px);gap:14px;justify-content:center;margin-top:6px}
+.teclado button{width:76px;height:76px;border-radius:50%;border:0;background:var(--surface);font-size:28px;font-weight:700;cursor:pointer;color:var(--ink);display:grid;place-items:center}
+.teclado button:active{background:var(--seg)}
+.teclado button.sin{background:transparent}
+.teclado button:disabled{opacity:.3}
+.bloqueo .olvido{margin-top:20px}
 @media (prefers-reduced-motion:reduce){.sheet,.toast{transition:none}}
 </style>
 </head>
@@ -384,6 +418,7 @@ body.sin-scroll{overflow:hidden}
     <span id="mesLabel"></span>
     <button type="button" class="icon-btn" id="mesNext" aria-label="Mes siguiente">›</button>
   </div>
+  <button type="button" class="icon-btn ayuda-b" id="btnAyuda" aria-label="Ayuda de esta pantalla">?</button>
   <button type="button" class="icon-btn" id="btnAjustes" aria-label="Ajustes"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </div>
 <main>
@@ -408,6 +443,8 @@ body.sin-scroll{overflow:hidden}
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="bienvenida" id="bienvenida" hidden></div>
+<div class="guia" id="guia" hidden role="dialog" aria-modal="true" aria-label="Primeros pasos"></div>
+<div class="bloqueo" id="bloqueo" hidden role="dialog" aria-modal="true" aria-label="App bloqueada"></div>
 <input type="file" id="fCopia" accept=".json,application/json" hidden>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -1680,6 +1717,8 @@ function abrirAjustes(){
     ['informes','✉️','Informes por correo', D.ajustes.informes.email ? (D.ajustes.informes.modo==='servicio' ? 'Automático a ' : 'A ') + D.ajustes.informes.email : 'Sin configurar'],
     ['cotiz','💹','Servicio de Google (cotizaciones y correo)', urlCotiz() ? 'Servicio configurado' : 'Sin configurar'],
     ['infl','📊','Inflación de referencia', String(D.ajustes.inflacion ?? 0).replace('.',',') + ' % anual'],
+    ['bloqueo','🔒','Bloqueo con PIN', bloq().activo ? 'Activado' + (bloq().huella ? ' · con huella o Face ID' : '') : 'Desactivado'],
+    ['ayuda','❓','Ayuda', 'Qué es cada cosa y primeros pasos'],
     ['tema','🎨','Apariencia', (COLORES[D.ajustes.color||'verde'] || COLORES.verde).n + ' · modo ' + { auto:'automático', light:'claro', dark:'oscuro' }[D.ajustes.tema||'auto']],
     ['perfil','🙂','Tu nombre', D.perfil.nombre || 'Sin poner'],
     ['borrar','🗑️','Borrar todos los datos', 'Empezar de cero en este móvil']
@@ -1687,7 +1726,7 @@ function abrirAjustes(){
   const box = document.createElement('div');
   box.innerHTML = `<div class="grupo">${items.map(([k,e,t,d]) => `<button type="button" class="ajuste" data-a="${k}"><span class="e">${e}</span><span class="t"><b>${t}</b><small>${esc(d)}</small></span><span class="flecha">›</span></button>`).join('')}</div>
     <p class="hint" style="text-align:center;margin-top:16px">Tus datos están guardados solo en este móvil.</p>`;
-  const map = { informes:ajustesInformes, cuenta:verCuentas, infl:ajustesInflacion, reglas:ajustesReglas, cotiz:ajustesCotiz, copia:ajustesCopia, cats:ajustesCats, pres:ajustesPres, fijos:ajustesFijos, tema:ajustesTema, perfil:ajustesPerfil, borrar:ajustesBorrar };
+  const map = { bloqueo:ajustesBloqueo, ayuda:() => ayuda(st.tab, true), informes:ajustesInformes, cuenta:verCuentas, infl:ajustesInflacion, reglas:ajustesReglas, cotiz:ajustesCotiz, copia:ajustesCopia, cats:ajustesCats, pres:ajustesPres, fijos:ajustesFijos, tema:ajustesTema, perfil:ajustesPerfil, borrar:ajustesBorrar };
   box.querySelectorAll('[data-a]').forEach(b => b.onclick = () => map[b.dataset.a]());
   abrirSheet('Ajustes', box);
 }
@@ -2680,9 +2719,202 @@ function autoCotizar(){
   cotizar().then(() => { if (st.tab==='ahorro') renderAhorro(); }).catch(() => {}).finally(() => autoCotizar.en = false);
 }
 
+/* ════════════ Ayuda ════════════ */
+const AYUDA = {
+  apuntar: ['Apuntar', [
+    ['Cómo apuntar un gasto', 'Escribe el importe, toca la categoría y pulsa Guardar. La fecha es hoy salvo que la cambies. Puedes escribir operaciones como 12,50+3 y la app hace la cuenta.'],
+    ['Gasto, ingreso o traspaso', 'Un gasto resta dinero y un ingreso lo suma. Un traspaso solo mueve dinero entre tus cuentas (sacar del cajero, pagar el recibo de la tarjeta…), así que no cuenta como gasto ni como ingreso.'],
+    ['Básico y personal', 'Básico es lo necesario: casa, comida, facturas, transporte, salud. Personal es lo que eliges: ocio, restaurantes, ropa, viajes. Así ves cuánto se va en vivir y cuánto en caprichos. Cada categoría se puede cambiar de grupo en Ajustes → Categorías.'],
+    ['Normal, compartido, pagó otro o de trabajo', 'Normal: lo pagas tú y es tuyo. Compartido: pagas tú el total y otros te deben su parte; como gasto solo cuenta la tuya. Pagó otro: otra persona pagó y tú le debes tu parte. De trabajo: lo adelantas y te lo devuelven, así que no cuenta como gasto.'],
+    ['La cuenta', 'Si tienes varias cuentas (tarjeta, efectivo, cuenta conjunta…), elige desde cuál pagaste. La app recuerda la última que usaste.'],
+    ['Gastos fijos', 'El alquiler, la luz o las suscripciones se configuran en Ajustes → Gastos fijos. Cada mes te los recuerdo para apuntarlos con un toque, o se apuntan solos si lo eliges.']]],
+  movs: ['Movimientos', [
+    ['Ver y editar', 'Aquí está todo lo apuntado en el mes. Toca cualquier movimiento para cambiarlo o borrarlo. Las flechas de arriba cambian de mes.'],
+    ['Buscar', 'Escribe una palabra (por ejemplo, Mercadona) o un importe y busca en todos los meses.'],
+    ['Importar del banco', 'Con el botón Banco subes el extracto que descargas de la web de tu banco (CSV o Excel). Revisas cada movimiento antes de guardarlo y la app aprende las categorías para la próxima vez.'],
+    ['Pendientes', 'El aviso de arriba resume lo que te deben, lo que debes y los gastos de trabajo que aún no te han devuelto. Al tocarlo puedes marcarlos como cobrados o pagados.']]],
+  resumen: ['Resumen', [
+    ['Saldo de la cuenta', 'Es lo que debería haber en tu cuenta según lo que apuntas: lo de la última vez que lo comprobaste, más ingresos, menos gastos. Tócalo para comprobarlo con el banco: si no coincide, probablemente falte algo por apuntar.'],
+    ['Comparaciones', 'Compara lo que llevas gastado con el mes anterior y con el mismo mes del año pasado. En el mes en curso, a la misma fecha, para que sea justo.'],
+    ['Previsión de fin de mes', 'Lo que llevas más lo que sueles gastar en cada categoría y aún no has gastado, según los días que quedan.'],
+    ['Presupuestos', 'Si pones un límite mensual (Ajustes → Presupuestos), aquí ves cómo vas: verde bien, ámbar cerca del límite, rojo pasado.'],
+    ['Reparto de lo ingresado', 'De todo lo que ingresas, qué parte va a lo básico, qué parte a gastos personales y qué parte ahorras.'],
+    ['Fuera de lo normal', 'Avisa de las categorías que este mes van bastante por encima de tu media.'],
+    ['Inflación personal', 'En la vista Año: cuánto ha cambiado lo que pagas por lo básico respecto al año anterior. Mezcla precio y consumo, no solo precios.']]],
+  graficas: ['Gráficas', [
+    ['Periodo', 'Por defecto ves los últimos 12 meses seguidos, comparados con los 12 anteriores. Con "Por años" comparas años naturales.'],
+    ['Tipos de gráfica', 'Mes a mes: un dato a lo largo del tiempo. Reparto: básico, personal y ahorro de cada mes. Ahorro: ingresos frente a gastos. Categorías: una o varias, sumadas o por separado. Años: comparación por categoría entre dos años.'],
+    ['Grupos de categorías', 'En Categorías puedes sumar varias (por ejemplo luz, agua, gas e internet) y guardarlas como un grupo, como "Casa".'],
+    ['Zoom y pantalla completa', 'Con + y − acercas y alejas, con ↺ vuelves a verla entera y con el cuadrado la abres a pantalla completa. Desde ahí puedes girarla y descargarla como página web o como imagen.'],
+    ['Tope del eje', 'Si un mes muy alto no deja ver el resto, baja el tope o usa la escala logarítmica.']]],
+  ahorro: ['Ahorro e inversión', [
+    ['Patrimonio neto', 'Lo que tienes en total: tus cuentas más tus ahorros e inversiones.'],
+    ['Aportado y ganancia', 'Aportado es lo que has metido menos lo que has sacado. La ganancia es lo que vale ahora menos lo aportado.'],
+    ['Rentabilidad del mes', 'Lo que ha subido o bajado en el mes sin contar lo que aportas: meter 100 € no cuenta como ganar 100 €.'],
+    ['Rentabilidad compuesta, anual y real', 'Compuesta: encadena la de todos los meses, como si no hubieras aportado nada más. Al año: su equivalente en un año. Real: descontando la inflación, para saber si ganas poder de compra.'],
+    ['Cotización automática', 'Para acciones: con su ticker (por ejemplo BME:IDR) el valor se actualiza solo con la cotización de Google Finanzas. Los fondos se actualizan a mano con "Actualizar valor".'],
+    ['Objetivos', 'Un fondo de emergencia, un viaje… La app te dice cuánto te falta y cuándo lo conseguirías a tu ritmo de ahorro.'],
+    ['Simulador de recortes', 'Prueba cuánto ahorrarías gastando un poco menos en cada categoría, y cuánto sería invertido durante unos años.']]],
+  cuentas: ['Cuentas', [
+    ['Varias cuentas', 'Puedes tener cuenta corriente, tarjeta de crédito, efectivo y cuenta conjunta. Cada una tiene su saldo y su "comprobar con el banco". Se gestionan en Ajustes → Tus cuentas.'],
+    ['Tarjeta de crédito', 'Las compras se apuntan en la tarjeta y su saldo muestra lo que debes. Cuando el banco te cobre el recibo, apúntalo como traspaso de tu cuenta a la tarjeta. Así nada se cuenta dos veces.'],
+    ['Cuenta conjunta', 'Eliges qué parte de los gastos es tuya (por ejemplo 50 %). Un gasto de 100 € cuenta como 50 € en tus gastos, pero el saldo de la cuenta se ve completo para compararlo con el banco.'],
+    ['Copia de seguridad', 'Tus datos están solo en este móvil. Guarda una copia de vez en cuando (Ajustes → Copia de seguridad) en Archivos, Drive, WhatsApp o el correo: con ella lo recuperas todo en cualquier móvil.']]]
+};
+function ayuda(tema, todo){
+  const temas = todo ? Object.keys(AYUDA) : [tema === 'apuntar' || !AYUDA[tema] ? 'apuntar' : tema, 'cuentas'].filter((x,i,a) => a.indexOf(x) === i);
+  const box = document.createElement('div'); box.className = 'ayuda';
+  box.innerHTML = temas.map(k => `${temas.length > 1 || todo ? `<h2 style="margin-top:${k===temas[0]?'4px':'22px'}">${AYUDA[k][0]}</h2>` : ''}${AYUDA[k][1].map(([t,d]) => `<details><summary>${esc(t)}</summary><p>${esc(d)}</p></details>`).join('')}`).join('')
+    + (todo ? '' : '<button class="btn ghost" type="button" data-todo>Ver toda la ayuda</button>') + '<button class="btn ghost" type="button" data-guia>Ver los primeros pasos</button>';
+  const bt = $('[data-todo]', box); if (bt) bt.onclick = () => ayuda(tema, true);
+  $('[data-guia]', box).onclick = () => { cerrarSheet(); mostrarGuia(); };
+  abrirSheet(todo ? 'Ayuda' : 'Ayuda · ' + AYUDA[temas[0]][0], box);
+}
+$('#btnAyuda').onclick = () => { if (D) ayuda(st.tab); };
+
+/* ════════════ Primeros pasos ════════════ */
+const PASOS = [
+  ['✍️', 'Apunta en segundos', ['Escribe el importe, toca la categoría y listo.'], ['Gasto o ingreso, arriba del todo.', 'Básico es lo necesario; personal, lo que eliges.', 'Si pagas a medias, usa "Compartido".']],
+  ['🏦', 'Tu saldo, siempre al día', ['Dile a la app cuánto tienes en tu cuenta y lo irá calculando con lo que apuntas.'], ['Compáralo con tu banco de vez en cuando: si no coincide, falta algo por apuntar.', 'Puedes añadir tarjetas, efectivo o una cuenta conjunta.']],
+  ['📊', 'Mira en qué se va', ['En Resumen ves el mes de un vistazo, y en Gráficas comparas meses y años.'], ['En Ahorro sigues tus cuentas de ahorro, fondos y acciones.', 'Si tienes dudas, toca la ? de arriba en cualquier pantalla.']],
+  ['💾', 'Guarda una copia', ['Tus datos están solo en este móvil: nadie más los ve, pero si lo pierdes, se pierden.'], ['Guarda una copia de vez en cuando en Ajustes → Copia de seguridad.', 'Te avisaré si pasa mucho tiempo sin hacerla.']]
+];
+function mostrarGuia(i){
+  i = i || 0; const G = $('#guia'); const p = PASOS[i]; const ult = i === PASOS.length - 1;
+  G.innerHTML = `<button type="button" class="saltar" data-saltar>${ult ? '' : 'Saltar'}</button>
+    <div class="paso"><div class="ilus" aria-hidden="true">${p[0]}</div><h2>${p[1]}</h2>${p[2].map(t => `<p>${t}</p>`).join('')}<ul>${p[3].map(t => `<li>${t}</li>`).join('')}</ul></div>
+    <div class="puntos" aria-hidden="true">${PASOS.map((_, k) => `<i class="${k===i?'on':''}"></i>`).join('')}</div>
+    <div class="botones">${i ? '<button class="btn ghost" type="button" data-atras>Atrás</button>' : ''}<button class="btn primary" type="button" data-sig>${ult ? 'Empezar' : 'Siguiente'}</button></div>`;
+  G.hidden = false;
+  const fin = () => { G.hidden = true; if (D){ D.ajustes.guiaVista = true; guardar(); } };
+  $('[data-saltar]', G).onclick = fin;
+  $('[data-sig]', G).onclick = () => ult ? fin() : mostrarGuia(i + 1);
+  const at = $('[data-atras]', G); if (at) at.onclick = () => mostrarGuia(i - 1);
+}
+
+/* ════════════ Bloqueo con PIN y huella ════════════ */
+const B64 = { de: b => btoa(String.fromCharCode(...new Uint8Array(b))), a: s => Uint8Array.from(atob(s), c => c.charCodeAt(0)) };
+async function hashPin(pin, sal){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sal + ':' + pin));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('');
+}
+const bloq = () => (D && D.ajustes.bloqueo) || {};
+const huellaDisponible = async () => { try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch(e){ return false; } };
+async function crearHuella(){
+  const cred = await navigator.credentials.create({ publicKey: {
+    challenge: crypto.getRandomValues(new Uint8Array(32)), rp: { name: 'Mis gastos' },
+    user: { id: crypto.getRandomValues(new Uint8Array(16)), name: 'mis-gastos', displayName: D.perfil.nombre || 'Mis gastos' },
+    pubKeyCredParams: [{ type:'public-key', alg:-7 }, { type:'public-key', alg:-257 }],
+    authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required', residentKey:'discouraged' }, timeout: 60000, attestation:'none' } });
+  return B64.de(cred.rawId);
+}
+async function comprobarHuella(){
+  const id = bloq().huella; if (!id) return false;
+  try { await navigator.credentials.get({ publicKey: { challenge: crypto.getRandomValues(new Uint8Array(32)), allowCredentials: [{ type:'public-key', id: B64.a(id) }], userVerification:'required', timeout: 60000 } }); return true; }
+  catch(e){ return false; }
+}
+let bloqueada = false, fallos = 0, esperaHasta = 0;
+function bloquear(){
+  if (!bloq().activo) return;
+  bloqueada = true; cerrarSheet(); const L = $('#bloqueo'); let pin = '';
+  const n = bloq().len || 4;
+  const pinta = (err) => {
+    const espera = Math.max(0, Math.ceil((esperaHasta - Date.now())/1000));
+    L.innerHTML = `<div class="candado" aria-hidden="true">🔒</div><h2>${D.perfil.nombre ? 'Hola, ' + esc(D.perfil.nombre) : 'Mis gastos'}</h2><p class="hint" style="margin:0">Introduce tu PIN</p>
+      <div class="pin-p" aria-label="${pin.length} de ${n} cifras">${Array.from({length:n}, (_, k) => `<i class="${k < pin.length ? 'on' : ''}"></i>`).join('')}</div>
+      <p class="error" role="alert">${espera ? 'Demasiados intentos. Espera ' + espera + ' s.' : err || ''}</p>
+      <div class="teclado">${[1,2,3,4,5,6,7,8,9].map(d => `<button type="button" data-d="${d}" ${espera?'disabled':''}>${d}</button>`).join('')}
+        ${bloq().huella ? '<button type="button" data-h aria-label="Usar huella o Face ID">👆</button>' : '<button type="button" class="sin" disabled></button>'}
+        <button type="button" data-d="0" ${espera?'disabled':''}>0</button><button type="button" class="sin" data-x aria-label="Borrar">⌫</button></div>
+      <button type="button" class="link olvido" data-olv>¿Has olvidado el PIN?</button>`;
+    L.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { if (pin.length < n){ pin += b.dataset.d; pinta(); if (pin.length === n) probar(); } });
+    $('[data-x]', L).onclick = () => { pin = pin.slice(0,-1); pinta(); };
+    const h = $('[data-h]', L); if (h) h.onclick = async () => { if (await comprobarHuella()) desbloquear(); };
+    $('[data-olv]', L).onclick = olvidoPin;
+    if (espera) setTimeout(() => pinta(), 1000);
+  };
+  const probar = async () => {
+    if (await hashPin(pin, bloq().sal) === bloq().hash){ desbloquear(); return; }
+    fallos++; pin = ''; if (fallos >= 5){ esperaHasta = Date.now() + 30000; fallos = 0; }
+    pinta('PIN incorrecto');
+  };
+  L.hidden = false; pinta();
+  if (bloq().huella) setTimeout(async () => { if (bloqueada && await comprobarHuella()) desbloquear(); }, 350);
+}
+function desbloquear(){
+  bloqueada = false; fallos = 0; $('#bloqueo').hidden = true;
+  if (!D.ajustes.guiaVista) setTimeout(() => mostrarGuia(), 300);
+}
+function olvidoPin(){
+  const L = $('#bloqueo');
+  L.innerHTML = `<div class="candado">🔑</div><h2>¿Has olvidado el PIN?</h2>
+    <p style="max-width:420px">Por seguridad no se puede ver ni cambiar sin el PIN. La única opción es borrar los datos de este móvil y recuperarlos desde una copia de seguridad.</p>
+    <label class="campo" style="max-width:320px;width:100%"><span>Escribe BORRAR para confirmar</span><input id="olvB" autocomplete="off"></label>
+    <button class="btn danger" type="button" id="olvOk" style="max-width:320px">Borrar datos de este móvil</button>
+    <button class="btn ghost" type="button" id="olvNo" style="max-width:320px">Volver a intentarlo</button>`;
+  $('#olvNo').onclick = bloquear;
+  $('#olvOk').onclick = () => { if ($('#olvB').value.trim().toUpperCase() !== 'BORRAR') return toast('Escribe BORRAR para confirmar.', true);
+    try { localStorage.removeItem(CLAVE); } catch(e){} D = null; bloqueada = false; L.hidden = true; bienvenida(); };
+}
+// Al volver a la app tras un rato fuera, se bloquea de nuevo
+let ocultaDesde = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){ ocultaDesde = Date.now(); return; }
+  if (D && bloq().activo && !bloqueada && Date.now() - ocultaDesde >= (bloq().min ?? 1) * 60000) bloquear();
+});
+
+function ajustesBloqueo(){
+  const B = bloq(); const box = document.createElement('div');
+  box.innerHTML = B.activo ? `<p>El bloqueo está <b>activado</b>${B.huella ? ', también con huella o Face ID' : ''}.</p>
+      <label class="campo"><span>Pedir el PIN al volver a la app después de</span><select id="bMin">${[[0,'Al instante'],[1,'1 minuto'],[5,'5 minutos'],[15,'15 minutos']].map(([v,l]) => `<option value="${v}" ${(B.min ?? 1)===v?'selected':''}>${l}</option>`).join('')}</select></label>
+      <div data-huella></div>
+      <button class="btn ghost" type="button" data-cambiar>Cambiar el PIN</button>
+      <button class="btn danger" type="button" data-quitar>Quitar el bloqueo</button>
+      <p class="hint" style="margin-top:14px">Protege la app frente a quien coja tu móvil. Si olvidas el PIN, solo podrás recuperar tus datos desde una copia de seguridad.</p>${volver()}`
+    : `<p>Con el bloqueo, la app pedirá un PIN (o tu huella o Face ID) al abrirla y al volver a ella después de un rato.</p>
+      <p class="hint">Es opcional. Útil si compartes el móvil o no quieres que nadie vea tus cuentas. Si olvidas el PIN, solo podrás recuperar tus datos desde una copia de seguridad, así que guarda una antes.</p>
+      <button class="btn primary" type="button" data-activar>Activar bloqueo con PIN</button>${volver()}`;
+  const act = $('[data-activar]', box); if (act) act.onclick = () => pedirPinNuevo();
+  const cam = $('[data-cambiar]', box); if (cam) cam.onclick = () => verificarPin(() => pedirPinNuevo());
+  const qui = $('[data-quitar]', box); if (qui) qui.onclick = () => verificarPin(() => { D.ajustes.bloqueo = { activo:false }; guardar(); toast('Bloqueo quitado'); ajustesBloqueo(); });
+  const mi = $('#bMin', box); if (mi) mi.onchange = e => { D.ajustes.bloqueo.min = Number(e.target.value); guardar(); toast('Guardado'); };
+  const hz = $('[data-huella]', box);
+  if (hz) huellaDisponible().then(ok => {
+    if (!ok){ hz.innerHTML = '<p class="hint">Este móvil (o navegador) no permite usar la huella o Face ID en la app. Funciona con el PIN.</p>'; return; }
+    hz.innerHTML = B.huella ? '<button class="btn ghost" type="button" data-hq>Dejar de usar huella o Face ID</button>' : '<button class="btn ghost" type="button" data-ha>👆 Usar también huella o Face ID</button>';
+    const ha = $('[data-ha]', hz); if (ha) ha.onclick = async () => { try { D.ajustes.bloqueo.huella = await crearHuella(); guardar(); toast('Huella o Face ID activados'); ajustesBloqueo(); } catch(e){ toast('No se ha podido activar. Inténtalo otra vez.', true); } };
+    const hq = $('[data-hq]', hz); if (hq) hq.onclick = () => { delete D.ajustes.bloqueo.huella; guardar(); ajustesBloqueo(); };
+  });
+  enlazarVolver(box); abrirSheet('Bloqueo', box);
+}
+function pedirPinNuevo(){
+  const f = document.createElement('form'); f.noValidate = true;
+  f.innerHTML = `<p class="hint" style="margin-top:0">Elige un PIN de 4 a 6 números que recuerdes bien.</p>
+    <label class="campo"><span>Nuevo PIN</span><input name="a" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" pattern="[0-9]*"></label>
+    <label class="campo"><span>Repítelo</span><input name="b" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" pattern="[0-9]*"></label>
+    <button class="btn primary" type="submit">Guardar PIN</button>`;
+  f.onsubmit = async e => { e.preventDefault(); const a = f.elements.a.value, b = f.elements.b.value;
+    if (!/^\d{4,6}$/.test(a)) return toast('El PIN tiene que tener de 4 a 6 números.', true);
+    if (a !== b) return toast('Los dos PIN no coinciden.', true);
+    if (!window.crypto || !crypto.subtle) return toast('Este navegador no permite el bloqueo. Abre la app desde su dirección https.', true);
+    const sal = B64.de(crypto.getRandomValues(new Uint8Array(16)));
+    D.ajustes.bloqueo = { ...bloq(), activo:true, sal, hash: await hashPin(a, sal), len: a.length, min: bloq().min ?? 1 };
+    guardar(); toast('Bloqueo activado'); ajustesBloqueo(); };
+  abrirSheet('Nuevo PIN', f);
+}
+function verificarPin(siOk){
+  const f = document.createElement('form'); f.noValidate = true;
+  f.innerHTML = `<label class="campo" style="margin-top:0"><span>Tu PIN actual</span><input name="a" type="password" inputmode="numeric" autocomplete="current-password" maxlength="6"></label><button class="btn primary" type="submit">Continuar</button>`;
+  f.onsubmit = async e => { e.preventDefault(); if (await hashPin(f.elements.a.value, bloq().sal) === bloq().hash) siOk(); else toast('PIN incorrecto', true); };
+  abrirSheet('Confirma tu PIN', f);
+}
+
 /* ════════════ Arranque ════════════ */
 function iniciar(){
-  aplicarTema(); aplicarFijosAuto(); setTimeout(informesAuto, 1500);
+  aplicarTema();
+  if (bloq().activo) bloquear();
+  aplicarFijosAuto(); setTimeout(informesAuto, 1500);
+  if (!bloq().activo && !D.ajustes.guiaVista) setTimeout(() => mostrarGuia(), 400);
   const h = new Date(); st.y = h.getFullYear(); st.m = h.getMonth();
   irA('apuntar');
 }
