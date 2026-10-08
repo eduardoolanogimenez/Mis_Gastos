@@ -334,13 +334,13 @@ h2{font-size:19px;margin:26px 0 10px}
 .chart-box{touch-action:pan-y}
 .barra-g{display:flex;justify-content:flex-end;gap:6px;margin:0 0 8px}
 .barra-g button,.pc-b button{width:38px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:20px;line-height:1;cursor:pointer;color:var(--ink);display:grid;place-items:center}
-.pc{position:fixed;inset:0;z-index:60;background:var(--surface);display:flex;flex-direction:column}
-.pc-h{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 8px;border-bottom:1px solid var(--line)}
+.pc{position:fixed;inset:0;height:100%;height:100dvh;z-index:60;background:var(--surface);display:flex;flex-direction:column}
+.pc-h{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) 8px calc(12px + env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
 .pc-h b{flex:1;font-size:15px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .pc-b{display:flex;gap:5px;flex:none}
-.pc-stage{position:relative;flex:1;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));overflow:hidden}
+.pc-stage{position:relative;flex:1;min-height:0;padding:10px calc(10px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(10px + env(safe-area-inset-left,0px));overflow:hidden}
 .pc-box{position:relative;width:100%;height:100%}
-.pc-stage.girado .pc-box{position:absolute;top:50%;left:50%;width:calc(100vh - 90px);height:calc(100vw - 20px);transform:translate(-50%,-50%) rotate(90deg)}
+.pc-stage.girado .pc-box{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(90deg)}
 .pc-menu{position:absolute;right:12px;top:calc(58px + env(safe-area-inset-top,0px));background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);overflow:hidden;z-index:2}
 .pc-menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:14px 16px;font-size:15.5px;cursor:pointer;border-bottom:1px solid var(--line)}
 .pc-menu button:last-child{border-bottom:0}
@@ -964,6 +964,10 @@ function ponerBarra(id, canvas){
 }
 
 /* ── Pantalla completa ── */
+/* Al girar el móvil, todas las gráficas se ajustan al nuevo ancho */
+(() => { let t; const re = () => { clearTimeout(t); t = setTimeout(() => Object.values(charts).forEach(ch => { try { ch.resize(); } catch(e){} }), 200); };
+  window.addEventListener('orientationchange', re);
+  if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', re); })();
 function pantallaCompleta(id){
   const f = fuentes[id]; if (!f) return;
   let ov = $('#pc');
@@ -977,12 +981,31 @@ function pantallaCompleta(id){
   dibujar('pc', $('#pcC', ov), clonar(f.cfg), { sinBarra:true });
   const c = () => charts.pc;
   ov.querySelectorAll('[data-z]').forEach(x => x.onclick = () => { const k = Number(x.dataset.z); k ? c().zoom(k) : c().resetZoom(); });
-  $('[data-g]', ov).onclick = () => { $('.pc-stage', ov).classList.toggle('girado'); setTimeout(() => c() && c().resize(), 60); };
+  const stage = $('.pc-stage', ov), box = $('.pc-box', ov);
+  /** Ajusta la caja de la gráfica al hueco que queda de verdad (sin barras del navegador ni muescas). */
+  const ajustar = () => {
+    if (stage.classList.contains('girado')){
+      const cs = getComputedStyle(stage);
+      const w = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const h = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      box.style.width = h + 'px'; box.style.height = w + 'px';
+    } else { box.style.width = ''; box.style.height = ''; }
+    if (c()) c().resize();
+  };
+  const horizontal = () => window.innerWidth > window.innerHeight;
+  const btnG = $('[data-g]', ov);
+  const ponerBotonGirar = () => { btnG.hidden = horizontal(); };
+  btnG.onclick = () => { stage.classList.toggle('girado'); requestAnimationFrame(ajustar); };
+  // Al girar el móvil de verdad: quita el giro manual (si no, quedaría girada dos veces) y redibuja
+  const alGirar = () => { if (horizontal()) stage.classList.remove('girado'); ponerBotonGirar(); ajustar(); setTimeout(ajustar, 250); setTimeout(ajustar, 600); };
+  ov._alGirar && window.removeEventListener('resize', ov._alGirar);
+  ov._alGirar = alGirar; window.addEventListener('resize', alGirar);
+  ponerBotonGirar();
   const menu = $('.pc-menu', ov);
   $('[data-d]', ov).onclick = () => menu.hidden = !menu.hidden;
   $('[data-html]', ov).onclick = () => { menu.hidden = true; descargarHTML(id); };
   $('[data-png]', ov).onclick = () => { menu.hidden = true; descargarPNG(); };
-  $('[data-x]', ov).onclick = () => { ov.hidden = true; document.body.classList.remove('sin-scroll'); if (charts.pc){ charts.pc.destroy(); delete charts.pc; } };
+  $('[data-x]', ov).onclick = () => { ov.hidden = true; document.body.classList.remove('sin-scroll'); window.removeEventListener('resize', alGirar); if (charts.pc){ charts.pc.destroy(); delete charts.pc; } };
 }
 const nombreArchivo = t => 'mis-gastos-' + norm(t).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50) + '-' + hoyISO();
 async function descargarPNG(){
