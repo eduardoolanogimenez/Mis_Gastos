@@ -1942,6 +1942,23 @@ function rentInv(v){
   const mejor = pts.reduce((b,p) => !b || p.r > b.r ? p : b, null), peor = pts.reduce((b,p) => !b || p.r < b.r ? p : b, null);
   return { pts: pts.slice(-24), comp, anual, real, mejor, peor, media: pts.length ? pts.reduce((s,p)=>s+p.r,0)/pts.length : null };
 }
+/** Rentabilidad acumulada a final de cada mes: (valor − aportado) / aportado × 100. */
+function rentAcum(v){
+  const h = new Date(); const pre = ymKey(h.getFullYear(), h.getMonth());
+  // El mes en curso solo sale cuando ya has apuntado algo en él (si no, repetiría el anterior)
+  const hayEsteMes = D.invMovs.some(x => x.inv === v.id && x.fecha.slice(0,7) === pre);
+  return mesesInv([v.id]).filter(x => hayEsteMes || ymKey(x.y, x.m) !== pre).map(x => { const e = estadoInv(v, x.fin);
+    return e.aportado > 0 && e.n ? { y:x.y, m:x.m, r: e.gan / e.aportado * 100, gan: e.gan, valor: e.valor, aportado: e.aportado } : null; }).filter(Boolean);
+}
+function rentAcumHTML(v){
+  const A = rentAcum(v); if (A.length < 2) return '';
+  const u = A[A.length-1], max = A.reduce((b,p) => p.r > b.r ? p : b), min = A.reduce((b,p) => p.r < b.r ? p : b);
+  const et = p => MC[p.m] + ' ' + String(p.y).slice(2);
+  return `<div class="panel"><h3>Rentabilidad acumulada</h3>
+    <p class="hint" style="margin-top:0">Lo que ganas sobre lo aportado a final de cada mes: (valor − aportado) / aportado.${v.tipo==='accion' ? ' Incluye los dividendos cobrados.' : ''}</p>
+    <div class="chart-box" style="height:200px"><canvas id="cInvA"></canvas></div>
+    <p class="comparas" style="margin:8px 0 0">${MESES[u.m]} <b class="${u.r>=0?'down':'up'}">${pct(u.r)}</b> · máximo ${pct(max.r)} (${et(max)}) · mínimo ${pct(min.r)} (${et(min)})</p></div>`;
+}
 function rentHTML(v){
   const R = rentInv(v); if (!R.pts.length) return '';
   const et = p => p ? MC[p.m] + ' ' + String(p.y).slice(2) : '';
@@ -1951,7 +1968,7 @@ function rentHTML(v){
     <div><small>Real</small><b class="${(R.real||0)>=0?'down':'up'}">${pct(R.real)}</b><em>descontando ${String(D.ajustes.inflacion ?? 0).replace('.',',')} % de inflación</em></div>
     <div><small>Media al mes</small><b>${pct(R.media)}</b></div>
     <div><small>Mejor mes</small><b class="down">${pct(R.mejor && R.mejor.r)}</b><em>${et(R.mejor)}</em></div><div><small>Peor mes</small><b class="up">${pct(R.peor && R.peor.r)}</b><em>${et(R.peor)}</em></div></div>
-    <div class="panel"><h3>Rentabilidad de cada mes</h3><div class="chart-box" style="height:170px"><canvas id="cInvR"></canvas></div><p class="hint">Sin contar lo que aportas o retiras: solo lo que ha subido o bajado.</p></div>`;
+    <div class="panel"><h3>Rentabilidad de cada mes</h3><div class="chart-box" style="height:170px"><canvas id="cInvR"></canvas></div><p class="hint">Lo que ha subido o bajado dentro de cada mes, sin contar lo que aportas o retiras.</p></div>`;
 }
 
 function valorObjetivo(o, total, cta){
@@ -2589,6 +2606,7 @@ function detalleInv(id){
         <button type="button" class="btn ghost mini" data-cot>Actualizar ahora</button>` : `<p class="hint">Pon su ticker (por ejemplo BME:IDR para Indra o NASDAQ:AAPL para Apple) en <b>Editar</b> y el valor se actualizará solo.</p>`}</div>` : ''}
     <div class="acciones">${botones.map(([kk,l]) => `<button type="button" data-k="${kk}">${l}</button>`).join('')}</div>
     <div class="panel"><div class="chart-box" style="height:200px"><canvas id="cInvD"></canvas></div></div>
+    ${rentAcumHTML(v)}
     ${rentHTML(v)}
     <h2>Movimientos</h2>
     ${movs.length ? `<div class="grupo">${movs.map(x => `<button type="button" class="mov" data-m="${x.id}"><span class="txt"><span class="c">${KINV[x.k]}</span>
@@ -2600,6 +2618,16 @@ function detalleInv(id){
   $('[data-ed]', box).onclick = () => editarInv(v);
   const bc = $('[data-cot]', box); if (bc) bc.onclick = async () => { await cotizarAhora(bc); detalleInv(id); };
   abrirSheet((v.emoji || TIPOS_INV[v.tipo].e) + ' ' + v.nombre, box);
+  const A = rentAcum(v);
+  if (A.length >= 2){ const pos = cssVar('--pos'), neg = cssVar('--neg');
+    dibujar('invA', $('#cInvA', box), { type:'line', data:{ labels: A.map(p => MC[p.m] + ' ' + String(p.y).slice(2)), datasets:[{ label:'Rentabilidad acumulada', data: A.map(p => Math.round(p.r*100)/100),
+        borderWidth:3, pointRadius: A.length > 36 ? 0 : 2.5, pointHoverRadius:5, tension:.2,
+        borderColor: pos, pointBackgroundColor: A.map(p => p.r >= 0 ? pos : neg), pointBorderColor: A.map(p => p.r >= 0 ? pos : neg),
+        segment:{ borderColor: c => (c.p0.parsed.y + c.p1.parsed.y) / 2 < 0 ? neg : pos },
+        fill:{ target:'origin', above: pos + '26', below: neg + '26' } }] },
+      options:{ maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+        plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: x => { const p = A[x.dataIndex]; return [' ' + pct(p.r), ' Ganancia: ' + fmt(p.gan), ' Valor ' + fmt(p.valor) + ' · aportado ' + fmt(p.aportado)]; } } } },
+        scales:{ y:{ grid:{ color: c => c.tick.value === 0 ? cssVar('--muted') : cssVar('--grid') }, ticks:{ callback:v => String(Math.round(v*10)/10).replace('.',',') + ' %', maxTicksLimit:6 } }, x:{ grid:{ display:false }, ticks:{ maxTicksLimit:7 } } } } }); }
   const R = rentInv(v);
   if (R.pts.length) dibujar('invR', $('#cInvR', box), { type:'bar', data:{ labels: R.pts.map(p => MC[p.m] + ' ' + String(p.y).slice(2)), datasets:[{ label:'Rentabilidad del mes', data: R.pts.map(p => Math.round(p.r*100)/100),
       backgroundColor: R.pts.map(p => p.r >= 0 ? cssVar('--pos') : cssVar('--neg')), borderRadius:3, maxBarThickness:24 }] },
@@ -2636,7 +2664,7 @@ function formInvMov(v, k, x){
     const m = { id: x ? x.id : nuevoId('v'), cr: x ? x.cr : Date.now(), inv: v.id, fecha: f.elements.f.value || hoyISO(), k, com: f.elements.n.value.trim() };
     if (k==='precio') m.precio = i; else m.imp = i;
     if (esAcc) m.acc = a;
-    D.invMovs = D.invMovs.filter(y => y.id !== m.id).concat([m]); guardar(); toast(KINV[k] + ' guardada'); detalleInv(v.id); render(); };
+    D.invMovs = D.invMovs.filter(y => y.id !== m.id).concat([m]); guardar(); toast('Guardado: ' + KINV[k].toLowerCase()); detalleInv(v.id); render(); };
   const bb = $('[data-b]', f); if (bb) bb.onclick = () => { if (!bb.classList.contains('armed')){ bb.classList.add('armed'); bb.textContent = 'Toca otra vez para borrar'; return; }
     D.invMovs = D.invMovs.filter(y => y.id !== x.id); guardar(); toast('Borrado'); detalleInv(v.id); render(); };
   $('[data-v]', f).onclick = () => detalleInv(v.id);
@@ -2750,6 +2778,7 @@ const AYUDA = {
   ahorro: ['Ahorro e inversión', [
     ['Patrimonio neto', 'Lo que tienes en total: tus cuentas más tus ahorros e inversiones.'],
     ['Aportado y ganancia', 'Aportado es lo que has metido menos lo que has sacado. La ganancia es lo que vale ahora menos lo aportado.'],
+    ['Rentabilidad acumulada', 'En el detalle de cada inversión: lo que ganas sobre lo aportado a final de cada mes, (valor − aportado) / aportado. Es la misma cifra que ves junto a Ganancia, mes a mes.'],
     ['Rentabilidad del mes', 'Lo que ha subido o bajado en el mes sin contar lo que aportas: meter 100 € no cuenta como ganar 100 €.'],
     ['Rentabilidad compuesta, anual y real', 'Compuesta: encadena la de todos los meses, como si no hubieras aportado nada más. Al año: su equivalente en un año. Real: descontando la inflación, para saber si ganas poder de compra.'],
     ['Cotización automática', 'Para acciones: con su ticker (por ejemplo BME:IDR) el valor se actualiza solo con la cotización de Google Finanzas. Los fondos se actualizan a mano con "Actualizar valor".'],
