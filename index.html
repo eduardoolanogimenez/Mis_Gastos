@@ -211,6 +211,8 @@ h2{font-size:19px;margin:26px 0 10px}
 .tabla th{text-align:left;color:var(--muted);font-size:13px;padding:6px 0}
 .tabla td{padding:8px 0;border-top:1px solid var(--line)}
 .tabla td:not(:first-child),.tabla th:not(:first-child){text-align:right}
+.tabla-anio td:first-child{font-weight:600}
+.tabla-anio td{padding:11px 0}
 .tabla .sw{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:7px}
 
 /* Hoja inferior y avisos */
@@ -362,6 +364,20 @@ body.sin-scroll{overflow:hidden}
 .sim-d{font-size:13.5px;color:var(--muted)}
 .sim-f input[type=range]{width:100%;margin:8px 0 4px;accent-color:var(--acento);height:28px}
 .punto{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:1px}
+.sa-lista{padding-top:4px;padding-bottom:6px}
+.sa-base{display:flex;align-items:center;gap:10px;margin:2px 0 8px;font-size:14.5px;color:var(--muted)}
+.sa-base .rango{flex:1;margin:0}
+.sa-extra{background:var(--acento-soft);border-radius:12px;padding:10px 12px;margin:0 0 10px;font-size:14.5px;line-height:1.45}
+.sa-extra p{margin:0 0 6px}
+.sa-extra .chk{margin:0;font-size:14.5px}
+.sa-f{display:grid;grid-template-columns:1fr 118px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.sa-f:last-of-type{border-bottom:0}
+.sa-n{font-size:16px;line-height:1.3;min-width:0}
+.sa-n small{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.sa-i{display:flex;align-items:center;gap:5px;border:1.5px solid var(--line);border-radius:10px;padding:0 10px;background:var(--surface)}
+.sa-i:focus-within{border-color:var(--acento)}
+.sa-i input{width:100%;border:0;background:none;font:inherit;font-size:17px;font-weight:700;text-align:right;padding:9px 0;color:var(--ink);outline:none}
+.sa-i span{color:var(--muted)}
 .sim-obj{margin:0;padding-left:18px;font-size:15.5px;line-height:1.7}
 /* Cuentas */
 .parte-f{display:grid;grid-template-columns:1fr 64px;gap:12px;align-items:center}
@@ -1140,7 +1156,7 @@ function renderResumen(){
       <div class="tres num"><div><small>Ingresos</small><b>${fmt0(ing)}</b></div><div><small>Ahorro</small><b class="${ing-g>=0?'down':'up'}">${fmt0(ing-g)}</b>${ing ? `<em>${Math.round((ing-g)/ing*100)} %</em>` : ''}</div><div><small>Media al mes</small><b>${con ? fmt0(g/con) : '—'}</b></div></div>
       ${barraGrupos({ g, b: ms.reduce((s,x)=>s+x.b,0), p: ms.reduce((s,x)=>s+x.p,0) })}
       <button class="btn primary" type="button" id="btnAnioNum">Tu ${st.y} en números</button>
-      <button class="btn ghost" type="button" id="btnSimR">✂️ Simulador de recortes</button>
+      <div class="fila2" style="gap:8px"><button class="btn ghost" type="button" id="btnSimA">📅 Simulador del año</button><button class="btn ghost" type="button" id="btnSimR">✂️ Simulador de recortes</button></div>
       ${previsionAnioHTML(st.y)}${heatmapHTML(st.y)}${inflacionHTML(st.y)}
       <h2>Reparto por año</h2><div class="anios-rep">${ys.map(y => { const t = [...Array(12).keys()].map(i => mes(y,i)).reduce((a,x) => ({ i:a.i+x.i, g:a.g+x.g, b:a.b+x.b, p:a.p+x.p, n:a.n+x.n }), { i:0,g:0,b:0,p:0,n:0 });
         if (!t.n) return ''; const it = itemsReparto(t); pend.push(['ry'+y, it.items, true]); const tot = it.items.reduce((s,x)=>s+x.v,0) || 1;
@@ -1165,6 +1181,7 @@ function renderResumen(){
   const ia = $('[data-irahorro]', sec); if (ia) ia.onclick = () => irA('ahorro');
   const an = $('#btnAnioNum', sec); if (an) an.onclick = () => anioEnNumeros(st.y);
   const sr = $('#btnSimR', sec); if (sr) sr.onclick = simulador;
+  const sa = $('#btnSimA', sec); if (sa) sa.onclick = simuladorAnio;
   const bc = $('#btnCesta', sec); if (bc) bc.onclick = editarCesta;
   dibujarDia(sec);
   pend.forEach(([id, items, mini]) => dona(id, items, mini));
@@ -1296,6 +1313,16 @@ function editarCesta(){
   $('[data-auto]', box).onclick = () => { D.ajustes.cesta = []; guardar(); cerrarSheet(); render(); };
   abrirSheet('Cesta de tu inflación', box);
 }
+/** Tabla de total y media al mes: ingresado, gastado, ahorrado e invertido. */
+function tablaAnio(y, con, i, g){
+  const n = con.length; const inv = con.reduce((s,k) => s + invNetoMes(y, k), 0);
+  const h = new Date(); const enCurso = y === h.getFullYear() && con.includes(h.getMonth());
+  const fila = (et, v, cls) => `<tr><td>${et}</td><td class="${cls||''}"><b>${fmt0(v)}</b></td><td class="${cls||''}">${fmt0(v/n)}</td></tr>`;
+  return `<h2>Total y media al mes</h2>
+    <table class="tabla num tabla-anio"><thead><tr><th></th><th>Total</th><th>Media al mes</th></tr></thead><tbody>
+      ${fila('💰 Ingresado', i)}${fila('🛒 Gastado', g)}${fila('🐷 Ahorrado', i - g, i - g >= 0 ? 'down' : 'up')}${fila('📈 Invertido', inv)}</tbody></table>
+    <p class="hint">Media de ${n === 1 ? '1 mes' : n + ' meses'} (${n === 12 ? 'el año completo' : MC[con[0]] + '–' + MC[con[n-1]]})${enCurso ? '. Incluye ' + MESES[h.getMonth()].toLowerCase() + ', que aún no ha terminado' : ''}. Invertido es lo que llevaste a ahorro e inversión menos lo que sacaste: es parte de lo ahorrado.</p>`;
+}
 function anioEnNumeros(y){
   const ms = [...Array(12).keys()].map(i => mes(y, i)); const con = ms.map((r,i) => r.n ? i : -1).filter(i => i >= 0); if (!con.length) return;
   const sum = (arr, f) => arr.reduce((s,x)=>s+(f(x)||0),0);
@@ -1316,6 +1343,7 @@ function anioEnNumeros(y){
     <div><small>Patrimonio</small><b>${fmt0(pFin)}</b>${pIni ? `<em class="${pFin>=pIni?'down':'up'}">${pFin>=pIni?'+':''}${fmt0(pFin-pIni)} en el año</em>` : ''}</div>
     <div><small>Mes más caro</small><b>${MESES[caro]}</b><em>${fmt0(ms[caro].g)}</em></div><div><small>Mes más barato</small><b>${MESES[barato]}</b><em>${fmt0(ms[barato].g)}</em></div>
     ${dMax ? `<div><small>Día de más gasto</small><b>${new Date(dMax[0]+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'})}</b><em>${fmt0(dMax[1])}</em></div><div><small>Gastos apuntados</small><b>${movs.length}</b></div>` : ''}</div>
+    ${tablaAnio(y, con, i, g)}
     <h2>Donde más gastaste</h2><ul class="leyenda">${top.map(([c,v]) => `<li><span class="e">${cat(c).emoji}</span><span>${esc(cat(c).nombre)}</span><b class="num">${fmt0(v)}</b><span class="p num">${g ? Math.round(v/g*100) : 0} %</span><span class="barra"><i style="width:${v/top[0][1]*100}%;background:${cat(c).color}"></i></span></li>`).join('')}</ul>
     ${camb.length ? `<h2>Lo que más cambió frente a ${y-1}</h2><ul class="leyenda">${camb.slice(0,3).concat(camb.length > 5 ? camb.slice(-2) : []).map(x => `<li><span class="e">${cat(x.c).emoji}</span><span>${esc(cat(x.c).nombre)}<small style="display:block;color:var(--muted);font-size:13px">${fmt0(x.p)} → ${fmt0(x.v)}</small></span><b class="num ${x.d>0?'up':'down'}">${pct(x.d)}</b><span></span></li>`).join('')}</ul>` : ''}
     ${grandes.length ? `<h2>Tus 5 gastos más grandes</h2><div class="grupo">${grandes.map(filaMov).join('')}</div>` : ''}
@@ -2045,6 +2073,108 @@ function ajustesInflacion(){
   enlazarVolver(f); abrirSheet('Inflación de referencia', f);
 }
 
+/* ════════════ Simulador del año ════════════ */
+/** Medias de los últimos 12 meses completos, por categoría (gastos e ingresos) y lo llevado a inversión. */
+function baseAnio(periodo, conExtra){
+  const f = st.ctaF; st.ctaF = '';
+  const h = new Date(); let ms = [];
+  if (periodo === 'anio') for (let k = 0; k < h.getMonth(); k++){ const r = mes(h.getFullYear(), k); if (r.n) ms.push({ r, y: h.getFullYear(), m: k }); }
+  if (!ms.length){ periodo = '12m'; let y = h.getFullYear(), m = h.getMonth();
+    for (let k = 0; k < 12; k++){ m--; if (m < 0){ m = 11; y--; } const r = mes(y, m); if (r.n) ms.push({ r, y, m }); } }
+  st.ctaF = f;
+  const n = ms.length || 1, por = {};
+  // Gastos extraordinarios: una categoría que en un mes supera el doble de lo que sueles gastar en un mes entero
+  const tot = ms.map(x => x.r.g).sort((a,b) => a-b); const medTot = tot.length ? tot[Math.floor(tot.length/2)] : 0;
+  const extra = [];
+  ms.forEach(({ r, y, m }) => Object.entries(r.cats).forEach(([c, v]) => {
+    if (cat(c).tipo === 'g' && medTot > 0 && v > 2 * medTot && v > 1000){ extra.push({ c, v, y, m }); if (!conExtra) return; }
+    por[c] = (por[c]||0) + v; }));
+  const med = c => Math.round((por[c.id]||0) / n);
+  const vivas = D.categorias.filter(c => !c.archivada);
+  const orden = (a, b) => (por[b.id]||0) - (por[a.id]||0);
+  return { n: ms.length, periodo, extra, med: Object.fromEntries(vivas.map(c => [c.id, med(c)])),
+    gas: vivas.filter(c => c.tipo === 'g').sort(orden), ing: vivas.filter(c => c.tipo === 'i').sort(orden),
+    inv: Math.round(ms.reduce((s, x) => s + invNetoMes(x.y, x.m), 0) / n) };
+}
+function simuladorAnio(){
+  const S = D.ajustes.simAnio = { v:{}, inv:null, periodo:'12m', extra:false, ...(D.ajustes.simAnio||{}) };
+  const B = baseAnio(S.periodo, S.extra); const box = document.createElement('div');
+  const val = id => S.v[id] ?? B.med[id] ?? 0;
+  const invMes = () => S.inv ?? B.inv;
+  const Y = new Date().getFullYear(), M = new Date().getMonth();
+  const fila = c => `<div class="sa-f" data-c="${c.id}"><span class="sa-n"><i class="punto" style="background:${c.tipo==='i' ? cssVar('--ingreso') : GRUPOS[c.grupo||'p'].color}"></i>${c.emoji} ${esc(c.nombre)}<small data-m></small></span>
+      <label class="sa-i"><input inputmode="decimal" autocomplete="off" value="${num2(val(c.id)).replace('.',',').replace(/,00$/,'')}" aria-label="${esc(c.nombre)} al mes"><span>€</span></label></div>`;
+  const grupo = (tit, cs, extra) => cs.length ? `<h2>${tit}</h2><div class="panel sa-lista">${cs.map(fila).join('')}${extra||''}</div>` : '';
+  const Yh = new Date().getFullYear(), hayAnio = new Date().getMonth() > 0;
+  box.innerHTML = `<p class="hint" style="margin-top:0">${B.n ? 'Pon lo que gastas e ingresas al mes en cada categoría. Empieza con tus medias: cámbialas para probar.' : 'Pon lo que gastas e ingresas al mes en cada categoría para ver cómo sería tu año.'}</p>
+    ${B.n ? `<div class="sa-base"><span>Medias de</span><div class="rango">${[['12m','Últimos 12 meses'], ...(hayAnio ? [['anio','Este año']] : [])].map(([k,l]) => `<button type="button" data-per="${k}" aria-pressed="${B.periodo===k}">${l}</button>`).join('')}</div></div>
+      ${B.extra.length ? `<div class="sa-extra"><p>${S.extra ? 'Incluyendo' : 'Sin contar'} ${B.extra.length === 1 ? 'un gasto extraordinario' : B.extra.length + ' gastos extraordinarios'}: ${B.extra.map(x => `<b>${cat(x.c).emoji} ${esc(cat(x.c).nombre)}</b> en ${MESES[x.m].toLowerCase()} de ${x.y} (${fmt0(x.v)})`).join(', ')}.</p>
+        <label class="chk"><input type="checkbox" data-extra ${S.extra ? 'checked' : ''}> Contarlos en las medias</label></div>` : ''}` : ''}
+    <div class="sim-res"><div class="cifra" style="margin:0"><div class="label">En un año gastarías</div><div class="valor num" data-g>0 €</div></div>
+      <div class="kpis num" style="margin:10px 0 0" data-k></div><div data-barra></div></div>
+    <div class="sim-pre"><button type="button" class="fchip" data-p="3">+3 % a todo (subida de precios)</button><button type="button" class="fchip" data-p="-10">−10 % en personal</button><button type="button" class="fchip" data-p="0">Volver a mis medias</button></div>
+    <h2>Cómo cerraría ${Y}</h2>
+    <div class="panel"><div class="kpis num" style="margin-top:-4px" data-cierre></div>
+      <div class="chart-box" style="height:210px;margin-top:6px"><canvas id="cSimA"></canvas></div>
+      <p class="hint">${M ? (M === 1 ? 'Enero' : 'De enero a ' + MESES[M-1].toLowerCase()) + ', lo que llevas apuntado. ' : ''}En ${MESES[M].toLowerCase()}, que está en curso, lo que llevas o lo previsto, lo que sea mayor.${M < 11 ? ' El resto del año, lo de este simulador.' : ''} Las barras claras son previsión. El patrimonio no incluye lo que ganen o pierdan tus inversiones.</p></div>
+    ${grupo('Ingresos al mes', B.ing)}
+    ${grupo('Básico al mes', B.gas.filter(c => (c.grupo||'p') === 'b'))}
+    ${grupo('Personal al mes', B.gas.filter(c => (c.grupo||'p') !== 'b'))}
+    <h2>Ahorro e inversión al mes</h2><div class="panel sa-lista"><div class="sa-f" data-c="__inv"><span class="sa-n">📈 A ahorro e inversión<small data-m></small></span>
+      <label class="sa-i"><input inputmode="decimal" autocomplete="off" value="${num2(invMes()).replace('.',',').replace(/,00$/,'')}" aria-label="A inversión al mes"><span>€</span></label></div>
+      <p class="hint" style="margin:6px 0 0">Lo que apartas cada mes a cuentas de ahorro, fondos o acciones. Sale de lo que ahorras.</p></div>`;
+
+  const calc = () => {
+    const G = B.gas.reduce((s,c) => s + val(c.id), 0), I = B.ing.reduce((s,c) => s + val(c.id), 0);
+    const Bb = B.gas.filter(c => (c.grupo||'p') === 'b').reduce((s,c) => s + val(c.id), 0), A = I - G, V = invMes();
+    $('[data-g]', box).textContent = fmt0(G*12);
+    $('[data-k]', box).innerHTML = `<div><small>Ingresarías</small><b>${fmt0(I*12)}</b><em>${fmt0(I)} al mes</em></div><div><small>Ahorrarías</small><b class="${A>=0?'down':'up'}">${fmt0(A*12)}</b><em>${I ? Math.round(A/I*100) + ' % de lo que ingresas' : fmt0(A) + ' al mes'}</em></div>
+      <div><small>Gasto al mes</small><b>${fmt0(G)}</b></div><div><small>A inversión</small><b>${fmt0(V*12)}</b><em>${A*12 - V*12 >= 0 ? 'quedarían ' + fmt0(A*12 - V*12) + ' en tus cuentas' : 'más de lo que ahorrarías'}</em></div>`;
+    $('[data-barra]', box).innerHTML = barraGrupos({ g: G*12, b: Bb*12, p: (G - Bb)*12 });
+    box.querySelectorAll('.sa-f').forEach(f => { const id = f.dataset.c, v = id === '__inv' ? invMes() : val(id), m = id === '__inv' ? B.inv : B.med[id] || 0;
+      f.querySelector('[data-m]').innerHTML = `${fmt0(v*12)} al año${Math.round(v) !== Math.round(m) ? ` · <span class="${(id === '__inv' || cat(id).tipo === 'i') === (v > m) ? 'down' : 'up'}">tu media ${fmt0(m)}</span>` : ''}`; });
+    // Cierre del año: real hasta el mes pasado, el mes en curso lo mayor de real y previsto, y lo previsto el resto
+    const f = st.ctaF; st.ctaF = '';
+    const meses = [...Array(12).keys()].map(k => {
+      if (k < M) { const r = mes(Y, k); return { g: r.g, i: r.i, v: invNetoMes(Y, k), real: true }; }
+      if (k > M) return { g: G, i: I, v: V, real: false };
+      const r = mes(Y, k); const mx = (cs, x) => cs.reduce((s,c) => s + Math.max(r.cats[c.id]||0, val(c.id)), 0) + Object.entries(r.cats).filter(([id]) => !cs.some(c => c.id === id) && cat(id).tipo === x).reduce((s,[,v]) => s + v, 0);
+      return { g: mx(B.gas, 'g'), i: mx(B.ing, 'i'), v: Math.max(invNetoMes(Y, k), V), real: false, gR: r.g, iR: r.i };
+    });
+    const tg = meses.reduce((s,x) => s + x.g, 0), ti = meses.reduce((s,x) => s + x.i, 0), tv = meses.reduce((s,x) => s + x.v, 0);
+    const prev = [...Array(12).keys()].map(k => mes(Y-1, k)); const pg = prev.reduce((s,r) => s + r.g, 0), pi = prev.reduce((s,r) => s + r.i, 0), hayPrev = prev.some(r => r.n);
+    st.ctaF = f;
+    const resto = meses.slice(M).reduce((s,x) => s + (x.i - (x.iR||0)) - (x.g - (x.gR||0)), 0);
+    const pHoy = (saldoHoy() || 0) + invActivas().reduce((s,v) => s + estadoInv(v).valor, 0);
+    const dif = (a, b, inv) => hayPrev && b ? `<em class="${(a > b) !== !!inv ? 'up' : 'down'}">${pct((a-b)/b*100)} frente a ${Y-1}</em>` : '';
+    $('[data-cierre]', box).innerHTML = `<div><small>Gastado en ${Y}</small><b>${fmt0(tg)}</b>${dif(tg, pg)}</div><div><small>Ingresado</small><b>${fmt0(ti)}</b>${dif(ti, pi, true)}</div>
+      <div><small>Ahorrado</small><b class="${ti-tg>=0?'down':'up'}">${fmt0(ti - tg)}</b><em>${ti ? Math.round((ti-tg)/ti*100) + ' %' : ''}${hayPrev ? ' · en ' + (Y-1) + ': ' + fmt0(pi - pg) : ''}</em></div>
+      <div><small>Invertido</small><b>${fmt0(tv)}</b></div>
+      <div><small>Patrimonio a 31 dic</small><b>${fmt0(pHoy + resto)}</b><em>hoy ${fmt0(pHoy)}</em></div><div><small>Media de gasto al mes</small><b>${fmt0(tg/12)}</b></div>`;
+    const ac = cssVar('--acento');
+    dibujar('simA', $('#cSimA', box), { type:'bar', data:{ labels: MC, datasets:[
+        { type:'line', label:'Ingresos', data: meses.map(x => Math.round(x.i)), borderColor: cssVar('--ingreso'), backgroundColor: cssVar('--ingreso'), borderWidth:2.5, pointRadius:2.5, tension:.25, order:0,
+          segment:{ borderDash: c => meses[c.p1DataIndex].real ? undefined : [5,4] } },
+        { label:'Gastos', data: meses.map(x => Math.round(x.g)), backgroundColor: meses.map(x => x.real ? ac : ac + '55'), borderRadius:4, maxBarThickness:26, order:1 } ] },
+      options:{ maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+        plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, boxHeight:10 } }, tooltip:{ callbacks:{ title: x => MESES[x[0].dataIndex] + (meses[x[0].dataIndex].real ? '' : ' (previsto)'), label: x => ' ' + x.dataset.label + ': ' + fmt0(x.raw) } } },
+        scales:{ y:{ ticks:{ callback: v => fmt0(v), maxTicksLimit:5 } }, x:{ grid:{ display:false } } } } });
+    guardarSA();
+  };
+  let tG; const guardarSA = () => { clearTimeout(tG); tG = setTimeout(() => { try { localStorage.setItem(CLAVE, JSON.stringify(D)); } catch(e){} }, 400); };
+  box.querySelectorAll('.sa-f input').forEach(inp => inp.oninput = () => { const id = inp.closest('.sa-f').dataset.c; const v = evalExpr(inp.value);
+    const n = v === null || Number.isNaN(v) ? 0 : Math.max(0, v); if (id === '__inv') S.inv = n; else S.v[id] = n; calc(); });
+  box.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { const k = Number(b.dataset.p);
+    if (!k){ S.v = {}; S.inv = null; }
+    else B.gas.forEach(c => { if (k > 0 || (c.grupo||'p') !== 'b') S.v[c.id] = Math.round(val(c.id) * (1 + k/100)); });
+    box.querySelectorAll('.sa-f').forEach(f => { const id = f.dataset.c; f.querySelector('input').value = num2(id === '__inv' ? invMes() : val(id)).replace('.',',').replace(/,00$/,''); });
+    calc(); toast(k ? 'Aplicado' : 'Vuelves a tus medias'); });
+  box.querySelectorAll('[data-per]').forEach(b => b.onclick = () => { S.periodo = b.dataset.per; simuladorAnio(); });
+  const ce = $('[data-extra]', box); if (ce) ce.onchange = () => { S.extra = ce.checked; simuladorAnio(); };
+  abrirSheet('Simulador del año', box);
+  calc();
+}
+
 /* ════════════ Simulador de recortes ════════════ */
 /** Media mensual de gasto por categoría en los últimos 12 meses cerrados (solo meses con datos). */
 function baseSimulador(){
@@ -2586,6 +2716,7 @@ function renderAhorro(){
     <h2>Evolución</h2>
     <div class="rango">${[['12m','12 meses'],['todo','Todo']].map(([k,l]) => `<button type="button" data-r="${k}" aria-pressed="${st.rangoInv===k}">${l}</button>`).join('')}</div>
     <div class="panel"><div class="chart-box" style="height:240px"><canvas id="cInv"></canvas></div></div>
+    <button type="button" class="banner" id="bSimA"><span>📅 <b>Simulador del año</b>: pon lo que gastas al mes y mira cómo cerrarías el año</span><span class="flecha">›</span></button>
     <button type="button" class="banner" id="bSim"><span>✂️ <b>Simulador de recortes</b>: ¿cuánto ahorrarías gastando un poco menos?</span><span class="flecha">›</span></button>
     ${objetivosHTML(total, cta)}
     <h2>Tus cuentas e inversiones</h2>
@@ -2600,6 +2731,7 @@ function renderAhorro(){
   const bc = $('#btnCot'); if (bc) bc.onclick = () => cotizarAhora(bc);
   sec.querySelectorAll('[data-obj]').forEach(b => b.onclick = () => editarObjetivo(D.objetivos.find(o => o.id===b.dataset.obj)));
   const bs = $('#bSim', sec); if (bs) bs.onclick = simulador;
+  const bsa = $('#bSimA', sec); if (bsa) bsa.onclick = simuladorAnio;
   const no = $('#nObj', sec); if (no) no.onclick = () => editarObjetivo();
   let meses = mesesInv(vs.map(v => v.id)); if (st.rangoInv==='12m') meses = meses.slice(-12);
   dibujar('inv', $('#cInv'), { type:'line', data:{ labels: meses.map(x => MC[x.m] + ' ' + String(x.y).slice(2)),
@@ -2806,7 +2938,8 @@ const AYUDA = {
     ['Rentabilidad compuesta, anual y real', 'Compuesta: encadena la de todos los meses, como si no hubieras aportado nada más. Al año: su equivalente en un año. Real: descontando la inflación, para saber si ganas poder de compra.'],
     ['Cotización automática', 'Para acciones: con su ticker (por ejemplo BME:IDR) el valor se actualiza solo con la cotización de Google Finanzas. Los fondos se actualizan a mano con "Actualizar valor".'],
     ['Objetivos', 'Un fondo de emergencia, un viaje… La app te dice cuánto te falta y cuándo lo conseguirías a tu ritmo de ahorro.'],
-    ['Simulador de recortes', 'Prueba cuánto ahorrarías gastando un poco menos en cada categoría, y cuánto sería invertido durante unos años.']]],
+    ['Simulador de recortes', 'Prueba cuánto ahorrarías gastando un poco menos en cada categoría, y cuánto sería invertido durante unos años.'],
+    ['Simulador del año', 'Pon lo que gastas e ingresas al mes en cada categoría (empieza con tus medias) y mira cuánto gastarías y ahorrarías en un año, y cómo cerraría este año sumando lo real hasta hoy y lo previsto para los meses que quedan.']]],
   cuentas: ['Cuentas', [
     ['Varias cuentas', 'Puedes tener cuenta corriente, tarjeta de crédito, efectivo y cuenta conjunta. Cada una tiene su saldo y su "comprobar con el banco". Se gestionan en Ajustes → Tus cuentas.'],
     ['Tarjeta de crédito', 'Las compras se apuntan en la tarjeta y su saldo muestra lo que debes. Cuando el banco te cobre el recibo, apúntalo como traspaso de tu cuenta a la tarjeta. Así nada se cuenta dos veces.'],
