@@ -744,6 +744,7 @@ function formMov(init, onGuardar, onBorrar){
     <datalist id="dlCom">${[...new Set(D.movs.map(x => x.com).filter(Boolean))].slice(-60).map(c => `<option value="${esc(c)}">`).join('')}</datalist>
     <p class="hint" data-sug hidden style="color:var(--acento)"></p>
     <p class="aviso" data-aviso hidden></p>
+    <p class="hint" data-cero hidden style="color:var(--acento)"></p>
     <button class="btn primary" type="submit" disabled>${init.id ? 'Guardar cambios' : 'Guardar'}</button>
     ${onBorrar ? '<button class="btn danger" type="button" data-borrar>Borrar</button>' : ''}`;
   const imp = f.elements.imp, out = $('.eval', f), btn = $('button[type=submit]', f);
@@ -780,7 +781,15 @@ function formMov(init, onGuardar, onBorrar){
     out.className = 'eval' + (Number.isNaN(v) ? ' err' : '');
     out.textContent = Number.isNaN(v) ? 'Importe no válido' : (v!==null && ex ? '= ' + fmt(v) : '');
     const c = f.querySelector('input[name=cat]:checked');
-    let msg = v!==null && !Number.isNaN(v) && v <= 0 ? 'El importe tiene que ser mayor que cero.' : '';
+    // Gasto o ingreso normal: se admite 0 (cancelado o devuelto) y negativo (devolución). Compartido, pagó otro y de trabajo, solo positivos.
+    const simple = tipo === 'i' || sub === 'n';
+    const ok = v !== null && !Number.isNaN(v) && (v > 0 || simple);
+    let msg = v!==null && !Number.isNaN(v) && v <= 0 && !simple ? 'Aquí el importe tiene que ser mayor que cero. Para anularlo, cámbialo a Normal y déjalo en 0.' : '';
+    const nota = $('[data-cero]', f);
+    nota.hidden = !(ok && v <= 0);
+    if (ok && v <= 0) nota.innerHTML = v === 0
+      ? (tipo === 'g' ? 'Quedará apuntado como <b>devuelto</b>: se ve en tus movimientos, pero no cuenta como gasto.' : 'Quedará apuntado, pero no cuenta como ingreso.')
+      : (tipo === 'g' ? `Es una <b>devolución</b>: resta ${fmt(-v)} de lo gastado en esta categoría ese mes y los suma a tu cuenta.` : `Resta ${fmt(-v)} de tus ingresos de ese mes.`);
     if (tipo==='g' && sub==='comp' && v > 0){
       const ps = personas(); const deben = ps.reduce((s,x)=>s+(x.i||0),0);
       if (!ps.length) msg = msg || 'Añade al menos una persona.';
@@ -794,7 +803,7 @@ function formMov(init, onGuardar, onBorrar){
       else if (!(mp > 0) || mp > v) msg = msg || 'Tu parte tiene que ser mayor que cero y no más que el total.';
     }
     $('[data-aviso]', f).hidden = !msg; $('[data-aviso]', f).textContent = msg;
-    btn.disabled = !(v > 0 && c && f.elements.fecha.value);
+    btn.disabled = !(ok && c && f.elements.fecha.value);
   }
   f.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tipo = b.dataset.t; pintarCats(); });
   f.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { imp.value = imp.value.replace(/[+\-]\s*$/,'') + b.dataset.op; imp.focus(); validar(); });
@@ -877,6 +886,8 @@ function filaMov(x){
   if (x.comp){ const p = x.comp.deu.filter(d => !d.ok).reduce((s,d)=>s+d.i,0); tag = `<span class="tag ${p?'tag-pend':'tag-ok'}">${p ? 'Te deben ' + fmt(p) : 'Compartido · cobrado'}</span>`; }
   else if (x.reem) tag = `<span class="tag ${x.reem.ok?'tag-ok':'tag-pend'}">${x.reem.ok ? 'De trabajo · devuelto' : 'De trabajo · pendiente'}</span>`;
   else if (x.debo) tag = `<span class="tag ${x.debo.ok?'tag-ok':'tag-pend'}">${x.debo.ok ? 'Pagado a ' + esc(x.debo.n) : 'Debes ' + fmt(x.debo.i) + ' a ' + esc(x.debo.n)}</span>`;
+  else if (x.t === 'g' && x.imp === 0) tag = '<span class="tag tag-ok">Devuelto</span>';
+  else if (x.t === 'g' && x.imp < 0) tag = '<span class="tag tag-ok">Devolución</span>';
   else if (x.rec) tag = '<span class="tag">Fijo</span>';
   return `<button type="button" class="mov" data-id="${x.id}"><span class="emo" style="background:color-mix(in srgb, ${c.color} 16%, transparent)">${c.emoji}</span>
     <span class="txt"><span class="c">${esc(c.nombre)}</span>${sub ? `<span class="s">${esc(sub)}</span>` : ''}${tag}</span>
@@ -2906,6 +2917,7 @@ function autoCotizar(){
 const AYUDA = {
   apuntar: ['Apuntar', [
     ['Cómo apuntar un gasto', 'Escribe el importe, toca la categoría y pulsa Guardar. La fecha es hoy salvo que la cambies. Puedes escribir operaciones como 12,50+3 y la app hace la cuenta.'],
+    ['Viaje cancelado o devoluciones', 'Si te devuelven un gasto, ábrelo y réstale lo devuelto (por ejemplo 450-450): queda en 0, sigue apuntado y no cuenta como gasto. Si te devuelven solo una parte, resta esa parte. Si la devolución llega otro mes, puedes apuntarla ese mes como gasto en negativo (-30) en la misma categoría.'],
     ['Gasto, ingreso o traspaso', 'Un gasto resta dinero y un ingreso lo suma. Un traspaso solo mueve dinero entre tus cuentas (sacar del cajero, pagar el recibo de la tarjeta…), así que no cuenta como gasto ni como ingreso.'],
     ['Básico y personal', 'Básico es lo necesario: casa, comida, facturas, transporte, salud. Personal es lo que eliges: ocio, restaurantes, ropa, viajes. Así ves cuánto se va en vivir y cuánto en caprichos. Cada categoría se puede cambiar de grupo en Ajustes → Categorías.'],
     ['Normal, compartido, pagó otro o de trabajo', 'Normal: lo pagas tú y es tuyo. Compartido: pagas tú el total y otros te deben su parte; como gasto solo cuenta la tuya. Pagó otro: otra persona pagó y tú le debes tu parte. De trabajo: lo adelantas y te lo devuelven, así que no cuenta como gasto.'],
