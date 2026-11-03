@@ -678,7 +678,9 @@ function cabecera(){
   $('#mesLabel').textContent = MESES[st.m] + ' ' + st.y;
   const ys = anios(); const h = new Date();
   $('#mesPrev').disabled = st.y <= ys[0] && st.m === 0;
-  $('#mesNext').disabled = st.y > h.getFullYear() || (st.y === h.getFullYear() && st.m >= h.getMonth());
+  // Se puede avanzar hasta el mes actual o, si hay algo apuntado con fecha futura, hasta ese mes
+  const ult = D.movs.reduce((mx, x) => x.fecha > mx ? x.fecha : mx, ymKey(h.getFullYear(), h.getMonth()));
+  $('#mesNext').disabled = ymKey(st.y, st.m) >= ult.slice(0,7);
 }
 $('#mesPrev').onclick = () => { if (st.m > 0) st.m--; else { st.m = 11; st.y--; } render(); };
 $('#mesNext').onclick = () => { if (st.m < 11) st.m++; else { st.m = 0; st.y++; } render(); };
@@ -866,7 +868,9 @@ function renderApuntar(forzar){
   sec.innerHTML = bannerSaldo() + bannersArriba();
   const f = formMov({ t:'g' }, m => {
     guardarMov(m); const sh = saldoHoy();
-    toast((m.t==='g' ? 'Gasto' : 'Ingreso') + ' guardado: ' + fmt(m.comp ? m.comp.total : m.reem ? m.reem.total : m.debo ? m.debo.total : m.imp) + (variasCuentas() ? ' en ' + cuenta(m.cta).nombre : '') + (sh !== null ? ' · saldo: ' + fmt(variasCuentas() ? saldoA(hoyISO(), m.cta) : sh) : ''));
+    const futuro = m.fecha > hoyISO(), fF = new Date(m.fecha + 'T12:00').toLocaleDateString('es-ES', { day:'numeric', month:'long' });
+    toast((m.t==='g' ? 'Gasto' : 'Ingreso') + ' guardado: ' + fmt(m.comp ? m.comp.total : m.reem ? m.reem.total : m.debo ? m.debo.total : m.imp) + (variasCuentas() ? ' en ' + cuenta(m.cta).nombre : '')
+      + (futuro ? ' para el ' + fF + '. Lo verás en ' + MESES[Number(m.fecha.slice(5,7))-1].toLowerCase() + ' y contará en tu saldo ese día.' : (sh !== null ? ' · saldo: ' + fmt(variasCuentas() ? saldoA(hoyISO(), m.cta) : sh) : '')));
     avisoPresupuesto(m); renderApuntar(true);
   });
   sec.appendChild(f);
@@ -2777,7 +2781,7 @@ function detalleInv(id){
     <h2>Movimientos</h2>
     ${movs.length ? `<div class="grupo">${movs.map(x => `<button type="button" class="mov" data-m="${x.id}"><span class="txt"><span class="c">${KINV[x.k]}</span>
       <span class="s">${new Date(x.fecha+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}${x.acc ? ' · ' + x.acc.toLocaleString('es-ES') + ' acciones' : ''}${x.com ? ' · ' + esc(x.com) : ''}</span></span>
-      <span class="i num ${x.k==='retirada'||x.k==='venta' ? '' : 'ing'}">${x.k==='precio' ? fmt(x.precio) : (x.k==='retirada'||x.k==='venta' ? '−' : x.k==='valor' ? '' : '+') + fmt(x.imp)}</span></button>`).join('')}</div>` : '<p class="hint">Todavía no has apuntado nada. Usa los botones de arriba.</p>'}
+      <span class="i num ${x.k==='retirada'||x.k==='venta'||x.imp<0 ? '' : 'ing'}">${x.k==='precio' ? fmt(x.precio) : x.k==='valor' ? fmt(x.imp) : ((x.k==='retirada'||x.k==='venta') !== (x.imp<0) ? '−' : '+') + fmt(Math.abs(x.imp))}</span></button>`).join('')}</div>` : '<p class="hint">Todavía no has apuntado nada. Usa los botones de arriba.</p>'}
     <button class="btn ghost" type="button" data-ed>Editar ${esc(v.nombre)}</button>`;
   box.querySelectorAll('[data-k]').forEach(b => b.onclick = () => formInvMov(v, b.dataset.k));
   box.querySelectorAll('[data-m]').forEach(b => b.onclick = () => formInvMov(v, null, D.invMovs.find(x => x.id===b.dataset.m)));
@@ -2815,16 +2819,21 @@ function formInvMov(v, k, x){
     ${esAcc ? `<label class="campo"><span>Número de acciones</span><input name="a" inputmode="decimal" value="${x && x.acc ? String(x.acc).replace('.',',') : ''}"></label>` : ''}
     <label class="campo"><span>${etiqueta}</span><input name="i" inputmode="decimal" value="${x ? num2(k==='precio' ? x.precio : x.imp).replace('.',',') : ''}" placeholder="0,00"></label>
     ${k==='valor' ? `<p class="hint">Mira el valor en la web o la app de tu banco. A partir de esta fecha, el valor se calculará desde aquí.</p>` : ''}
+    ${k==='interes' || k==='dividendo' ? `<p class="hint" data-neg>Si son negativos (comisiones, retenciones o intereses negativos), pon el signo menos, por ejemplo -3,50.</p>` : ''}
     ${esAcc ? `<p class="hint" data-pa></p>` : ''}
     <label class="campo"><span>Nota</span><input name="n" autocomplete="off" value="${esc(x && x.com || '')}" placeholder="Opcional"></label>
     <button class="btn primary" type="submit">${x ? 'Guardar cambios' : 'Guardar'}</button>
     ${x ? '<button class="btn danger" type="button" data-b>Borrar</button>' : ''}<button class="btn ghost" type="button" data-v>Volver</button>`;
   const pa = $('[data-pa]', f);
-  const calc = () => { if (!pa) return; const a = evalExpr(f.elements.a.value), i = evalExpr(f.elements.i.value); pa.textContent = a > 0 && i > 0 ? 'Sale a ' + fmt(i/a) + ' por acción.' : ''; };
+  const ng = $('[data-neg]', f);
+  const calc = () => { if (ng){ const i = evalExpr(f.elements.i.value); ng.innerHTML = i < 0 ? `Se restarán <b>${fmt(-i)}</b> ${v.tipo==='cuenta' ? 'del saldo de ' + esc(v.nombre) : 'de lo ganado con ' + esc(v.nombre)}.` : 'Si son negativos (comisiones, retenciones o intereses negativos), pon el signo menos, por ejemplo -3,50.'; }
+    if (!pa) return; const a = evalExpr(f.elements.a.value), i = evalExpr(f.elements.i.value); pa.textContent = a > 0 && i > 0 ? 'Sale a ' + fmt(i/a) + ' por acción.' : ''; };
   f.addEventListener('input', calc); calc();
   f.onsubmit = e => { e.preventDefault();
     const i = evalExpr(f.elements.i.value); const a = esAcc ? evalExpr(f.elements.a.value) : null;
-    if (!(i > 0) && !(k==='valor' && i===0)) return toast('Pon un importe válido.', true);
+    // Intereses y dividendos pueden ser negativos (comisiones, retenciones, correcciones)
+    const neg = k==='interes' || k==='dividendo';
+    if (i === null || Number.isNaN(i) || (neg ? i === 0 : !(i > 0) && !(k==='valor' && i===0))) return toast(neg ? 'Pon un importe distinto de cero. Puede ser negativo.' : 'Pon un importe válido.', true);
     if (esAcc && !(a > 0)) return toast('Pon cuántas acciones.', true);
     if (k==='venta' && a > estadoInv(v).acciones + (x ? x.acc : 0) + 1e-9) return toast('No tienes tantas acciones.', true);
     const m = { id: x ? x.id : nuevoId('v'), cr: x ? x.cr : Date.now(), inv: v.id, fecha: f.elements.f.value || hoyISO(), k, com: f.elements.n.value.trim() };
