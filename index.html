@@ -2667,7 +2667,7 @@ function ajustesCotiz(){
 
 /* ════════════ Ahorro e inversión ════════════ */
 const TIPOS_INV = { cuenta:{ n:'Cuenta de ahorro', e:'🏦', d:'Cuenta remunerada o depósito' }, fondo:{ n:'Fondo de inversión', e:'📈', d:'Fondo indexado, plan de pensiones…' }, accion:{ n:'Acciones', e:'📊', d:'Acciones de una empresa' } };
-const KINV = { aporte:'Aportación', retirada:'Retirada', interes:'Intereses', valor:'Valor actualizado', compra:'Compra', venta:'Venta', precio:'Cotización', dividendo:'Dividendo' };
+const KINV = { acciones:'Acciones que tienes', aporte:'Aportación', retirada:'Retirada', interes:'Intereses', valor:'Valor actualizado', compra:'Compra', venta:'Venta', precio:'Cotización', dividendo:'Dividendo' };
 const inv = id => D.inversiones.find(x => x.id===id);
 const invActivas = () => D.inversiones.filter(x => !x.archivada);
 
@@ -2675,18 +2675,22 @@ const invActivas = () => D.inversiones.filter(x => !x.archivada);
 function estadoInv(v, hasta){
   const ms = D.invMovs.filter(x => x.inv===v.id && (!hasta || x.fecha <= hasta))
     .sort((a,b) => a.fecha.localeCompare(b.fecha) || (a.k==='valor') - (b.k==='valor'));
-  let aportado = 0, intereses = 0, base = null, flujo = 0, acc = 0, precio = null, ult = null;
+  let aportado = 0, intereses = 0, base = null, flujo = 0, acc = 0, precio = null, ult = null, fV = '', fP = '';
   ms.forEach(x => {
     if (x.k!=='precio' || !x.auto) ult = x.fecha;
     if (x.k==='aporte'){ aportado += x.imp; flujo += x.imp; }
     else if (x.k==='retirada'){ aportado -= x.imp; flujo -= x.imp; }
     else if (x.k==='interes' || x.k==='dividendo'){ intereses += x.imp; if (v.tipo==='cuenta') flujo += x.imp; }
-    else if (x.k==='valor'){ base = x.imp; flujo = 0; }
-    else if (x.k==='compra'){ aportado += x.imp; acc += x.acc||0; if (x.acc) precio = x.imp/x.acc; }
-    else if (x.k==='venta'){ aportado -= x.imp; acc -= x.acc||0; if (x.acc) precio = x.imp/x.acc; }
-    else if (x.k==='precio'){ precio = x.precio; ult = ult || x.fecha; }
+    else if (x.k==='valor'){ base = x.imp; flujo = 0; fV = x.fecha; }
+    else if (x.k==='acciones'){ acc += x.acc||0; }
+    else if (x.k==='compra'){ aportado += x.imp; acc += x.acc||0; if (x.acc){ precio = x.imp/x.acc; fP = x.fecha; } }
+    else if (x.k==='venta'){ aportado -= x.imp; acc -= x.acc||0; if (x.acc){ precio = x.imp/x.acc; fP = x.fecha; } }
+    else if (x.k==='precio'){ precio = x.precio; ult = ult || x.fecha; fP = x.fecha; }
   });
-  const valor = v.tipo==='accion' ? (precio!==null ? acc*precio : aportado) : (base ?? 0) + flujo;
+  // Acción: acciones × precio. Si viene de un fondo, antes de tener precio sigue valiendo lo del último valor apuntado.
+  const valor = v.tipo==='accion'
+    ? (precio!==null && acc > 0 && fP >= fV ? acc*precio : base !== null ? base + flujo : precio!==null ? acc*precio : aportado)
+    : (base ?? 0) + flujo;
   return { valor, aportado, intereses, acciones: acc, precio, ult, n: ms.length, gan: valor - aportado + (v.tipo==='accion' ? intereses : 0) };
 }
 /** Dinero llevado a ahorro/inversión en un mes (aportado menos retirado). */
@@ -2773,7 +2777,8 @@ function detalleInv(id){
   box.innerHTML = `<div class="kpis num">${k.map(([l,b,m]) => `<div><small>${l}</small><b>${b}</b>${m ? `<em>${m}</em>` : ''}</div>`).join('')}</div>
     ${v.tipo==='accion' ? `<div class="panel"><h3>Cotización automática</h3>
       ${v.ticker ? `<p class="hint">Ticker <b>${esc(v.ticker)}</b>${ultAuto ? ' · ' + fmt(ultAuto.precio) + ' por acción' + (ultAuto.moneda && ultAuto.moneda!=='EUR' ? ' (' + String(ultAuto.orig).replace('.',',') + ' ' + ultAuto.moneda + ')' : '') + ' el ' + new Date(ultAuto.fecha+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'}) : ''}</p>
-        <button type="button" class="btn ghost mini" data-cot>Actualizar ahora</button>` : `<p class="hint">Pon su ticker (por ejemplo BME:IDR para Indra o NASDAQ:AAPL para Apple) en <b>Editar</b> y el valor se actualizará solo.</p>`}</div>` : ''}
+        ${urlCotiz() ? '<button type="button" class="btn ghost mini" data-cot>Actualizar ahora</button>' : '<p class="hint">Falta la dirección del servicio de Google en <b>Ajustes → Servicio de Google</b>. Mientras tanto, usa <b>Precio a mano</b>.</p>'}` : `<p class="hint">Pon su ticker (por ejemplo BME:IDR para Indra o NASDAQ:AAPL para Apple) en <b>Editar</b> y el valor se actualizará solo.</p>`}</div>` : ''}
+    ${v.tipo==='fondo' ? `<button type="button" class="banner" data-conv><span>📈 <b>¿Es una acción?</b> Conviértela y su valor se actualizará solo con la cotización.</span><span class="flecha">›</span></button>` : ''}
     <div class="acciones">${botones.map(([kk,l]) => `<button type="button" data-k="${kk}">${l}</button>`).join('')}</div>
     <div class="panel"><div class="chart-box" style="height:200px"><canvas id="cInvD"></canvas></div></div>
     ${rentAcumHTML(v)}
@@ -2781,12 +2786,13 @@ function detalleInv(id){
     <h2>Movimientos</h2>
     ${movs.length ? `<div class="grupo">${movs.map(x => `<button type="button" class="mov" data-m="${x.id}"><span class="txt"><span class="c">${KINV[x.k]}</span>
       <span class="s">${new Date(x.fecha+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}${x.acc ? ' · ' + x.acc.toLocaleString('es-ES') + ' acciones' : ''}${x.com ? ' · ' + esc(x.com) : ''}</span></span>
-      <span class="i num ${x.k==='retirada'||x.k==='venta'||x.imp<0 ? '' : 'ing'}">${x.k==='precio' ? fmt(x.precio) : x.k==='valor' ? fmt(x.imp) : ((x.k==='retirada'||x.k==='venta') !== (x.imp<0) ? '−' : '+') + fmt(Math.abs(x.imp))}</span></button>`).join('')}</div>` : '<p class="hint">Todavía no has apuntado nada. Usa los botones de arriba.</p>'}
+      <span class="i num ${x.k==='retirada'||x.k==='venta'||x.imp<0 ? '' : 'ing'}">${x.k==='acciones' ? '' : x.k==='precio' ? fmt(x.precio) : x.k==='valor' ? fmt(x.imp) : ((x.k==='retirada'||x.k==='venta') !== (x.imp<0) ? '−' : '+') + fmt(Math.abs(x.imp))}</span></button>`).join('')}</div>` : '<p class="hint">Todavía no has apuntado nada. Usa los botones de arriba.</p>'}
     <button class="btn ghost" type="button" data-ed>Editar ${esc(v.nombre)}</button>`;
   box.querySelectorAll('[data-k]').forEach(b => b.onclick = () => formInvMov(v, b.dataset.k));
-  box.querySelectorAll('[data-m]').forEach(b => b.onclick = () => formInvMov(v, null, D.invMovs.find(x => x.id===b.dataset.m)));
+  box.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { const x = D.invMovs.find(y => y.id===b.dataset.m); x.k === 'acciones' ? convertirAccion(v, x) : formInvMov(v, null, x); });
   $('[data-ed]', box).onclick = () => editarInv(v);
   const bc = $('[data-cot]', box); if (bc) bc.onclick = async () => { await cotizarAhora(bc); detalleInv(id); };
+  const cv = $('[data-conv]', box); if (cv) cv.onclick = () => convertirAccion(v);
   abrirSheet((v.emoji || TIPOS_INV[v.tipo].e) + ' ' + v.nombre, box);
   const A = rentAcum(v);
   if (A.length >= 2){ const pos = cssVar('--pos'), neg = cssVar('--neg');
@@ -2844,6 +2850,38 @@ function formInvMov(v, k, x){
     D.invMovs = D.invMovs.filter(y => y.id !== x.id); guardar(); toast('Borrado'); detalleInv(v.id); render(); };
   $('[data-v]', f).onclick = () => detalleInv(v.id);
   abrirSheet(KINV[k] + ' · ' + v.nombre, f);
+}
+
+/** Convierte un fondo en acción (o corrige cuántas acciones tienes): desde ese día vale acciones × cotización. */
+function convertirAccion(v, x){
+  const e = estadoInv(v); const esConv = v.tipo === 'fondo';
+  const f = document.createElement('form'); f.noValidate = true;
+  f.innerHTML = `${esConv ? `<p class="hint" style="margin-top:0">Así su valor se calculará solo: número de acciones × cotización de Google Finanzas. Todo lo que ya tienes apuntado (aportaciones y valores de cada mes) se queda igual.</p>` : ''}
+    ${esConv || !v.ticker ? `<label class="campo"><span>Ticker</span><input name="t" autocomplete="off" value="${esc(v.ticker||'')}" placeholder="BME:IDR, NASDAQ:IOVA…" style="text-transform:uppercase"></label>
+      <p class="hint">Mercado y símbolo, como en google.com/finance. Por ejemplo: Indra BME:IDR · Iovance NASDAQ:IOVA · Apple NASDAQ:AAPL.</p>` : ''}
+    <label class="campo"><span>${esConv ? 'Cuántas acciones tienes ahora' : 'Número de acciones'}</span><input name="a" inputmode="decimal" value="${x ? String(x.acc).replace('.',',') : ''}" placeholder="Por ejemplo, 120"></label>
+    <label class="campo"><span>Desde qué fecha</span><input type="date" name="f" value="${x ? x.fecha : hoyISO()}"></label>
+    <p class="hint" data-r>${e.valor ? 'Ahora mismo vale ' + fmt(e.valor) + ' según lo último que apuntaste.' : ''}</p>
+    <button class="btn primary" type="submit">${esConv ? 'Convertir en acción' : 'Guardar'}</button>
+    ${x ? '<button class="btn danger" type="button" data-b>Borrar</button>' : ''}<button class="btn ghost" type="button" data-v>Volver</button>`;
+  f.onsubmit = async ev => { ev.preventDefault();
+    const tk = f.elements.t ? f.elements.t.value.trim().toUpperCase() : v.ticker;
+    const a = evalExpr(f.elements.a.value);
+    if (esConv && !tk) return toast('Pon el ticker.', true);
+    if (tk && !/^[A-Z0-9.:\-]{1,30}$/.test(tk)) return toast('El ticker solo puede llevar letras, números, puntos, guiones y dos puntos.', true);
+    if (!(a > 0)) return toast('Pon cuántas acciones tienes.', true);
+    const V = inv(v.id);
+    if (esConv) Object.assign(V, { tipo:'accion', emoji: TIPOS_INV.accion.e });
+    if (tk) V.ticker = tk;
+    const m = { id: x ? x.id : nuevoId('v'), cr: x ? x.cr : Date.now(), inv: v.id, fecha: f.elements.f.value || hoyISO(), k:'acciones', acc: a, com: x ? x.com : 'Pasa a cotización automática' };
+    D.invMovs = D.invMovs.filter(y => y.id !== m.id).concat([m]); guardar();
+    toast(esConv ? v.nombre + ' ya es una acción' : 'Guardado'); render(); detalleInv(v.id);
+    if (urlCotiz()) { await cotizarAhora(); detalleInv(v.id); }
+  };
+  const bb = $('[data-b]', f); if (bb) bb.onclick = () => { if (!bb.classList.contains('armed')){ bb.classList.add('armed'); bb.textContent = 'Toca otra vez para borrar'; return; }
+    D.invMovs = D.invMovs.filter(y => y.id !== x.id); guardar(); toast('Borrado'); detalleInv(v.id); render(); };
+  $('[data-v]', f).onclick = () => detalleInv(v.id);
+  abrirSheet(esConv ? 'Convertir ' + v.nombre + ' en acción' : 'Acciones · ' + v.nombre, f);
 }
 
 function editarInv(v){
